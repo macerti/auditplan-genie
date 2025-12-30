@@ -1,12 +1,123 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useAuditStore } from '@/hooks/useAuditStore';
+import { StandardsSelector } from '@/components/StandardsSelector';
+import { AuditorPanel } from '@/components/AuditorPanel';
+import { ProcessPanel } from '@/components/ProcessPanel';
+import { GanttChart } from '@/components/GanttChart';
+import { SummaryPanel } from '@/components/SummaryPanel';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 
 const Index = () => {
+  const {
+    allStandards,
+    selectedStandards,
+    toggleStandard,
+    auditors,
+    addAuditor,
+    updateAuditor,
+    removeAuditor,
+    processes,
+    addProcess,
+    updateProcess,
+    removeProcess,
+    segments,
+    addSegment,
+    updateSegment,
+    removeSegment,
+    auditDays,
+    setAuditDays,
+    getAuditorSummaries
+  } = useAuditStore();
+
+  const summaries = getAuditorSummaries();
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b-4 border-border bg-card p-4">
+        <div className="container mx-auto">
+          <h1 className="text-2xl md:text-3xl font-bold uppercase tracking-tight">
+            ISO Audit Planner
+          </h1>
+          <p className="text-muted-foreground font-mono text-sm mt-1">
+            Visual Gantt for audit compliance validation
+          </p>
+        </div>
+      </header>
+
+      <main className="container mx-auto p-4 space-y-6">
+        {/* Standards and Days Configuration */}
+        <div className="grid md:grid-cols-2 gap-4">
+          <StandardsSelector
+            allStandards={allStandards}
+            selectedStandards={selectedStandards}
+            onToggle={toggleStandard}
+          />
+          <div className="border-2 border-border p-4 bg-card">
+            <h2 className="text-lg font-bold mb-3 uppercase tracking-wide">Audit Duration</h2>
+            <div className="flex items-center gap-3">
+              <Label htmlFor="audit-days" className="font-mono">Number of Days:</Label>
+              <Input
+                id="audit-days"
+                type="number"
+                min={1}
+                max={14}
+                value={auditDays}
+                onChange={e => setAuditDays(Math.max(1, Math.min(14, Number(e.target.value))))}
+                className="w-20 border-2"
+              />
+            </div>
+          </div>
+        </div>
+
+        <Separator className="border-2" />
+
+        {/* Team and Processes */}
+        <div className="grid lg:grid-cols-2 gap-4">
+          <AuditorPanel
+            auditors={auditors}
+            selectedStandards={selectedStandards}
+            onAdd={addAuditor}
+            onUpdate={updateAuditor}
+            onRemove={removeAuditor}
+            summaries={summaries}
+          />
+          <ProcessPanel
+            processes={processes}
+            selectedStandards={selectedStandards}
+            onAdd={addProcess}
+            onUpdate={updateProcess}
+            onRemove={removeProcess}
+          />
+        </div>
+
+        <Separator className="border-2" />
+
+        {/* Gantt Chart */}
+        <GanttChart
+          segments={segments}
+          auditors={auditors}
+          processes={processes}
+          summaries={summaries}
+          days={auditDays}
+          onAddSegment={addSegment}
+          onUpdateSegment={updateSegment}
+          onRemoveSegment={removeSegment}
+        />
+
+        <Separator className="border-2" />
+
+        {/* Compliance Summary */}
+        <SummaryPanel auditors={auditors} summaries={summaries} />
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t-4 border-border bg-card p-4 mt-8">
+        <div className="container mx-auto text-center text-sm font-mono text-muted-foreground">
+          ISO Audit Planning Tool — Compliance verification before approval
+        </div>
+      </footer>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { Auditor, AuditorSummary, ComplianceStatus } from '@/types/audit';
+import { Auditor, AuditorSummary, ComplianceStatus, formatHours } from '@/types/audit';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -80,16 +80,16 @@ export function SummaryPanel({ auditors, summaries }: SummaryPanelProps) {
               <div className="grid grid-cols-2 gap-2 text-sm font-mono mb-2">
                 <div>
                   <span className="text-muted-foreground">Hours: </span>
-                  {summary.totalHours}h
+                  {formatHours(summary.totalHours)}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Mandays: </span>
-                  {summary.mandaysUsed.toFixed(1)} / {summary.maxMandays}
+                  {summary.mandaysUsed.toFixed(2)} / {summary.maxMandays}
                 </div>
               </div>
               {Object.entries(summary.dailyHours).length > 0 && (
                 <div className="text-xs font-mono text-muted-foreground mb-2">
-                  Daily: {Object.entries(summary.dailyHours).map(([day, hours]) => `D${day}:${hours}h`).join(', ')}
+                  Daily: {Object.entries(summary.dailyHours).map(([day, hours]) => `D${day}:${formatHours(hours)}`).join(', ')}
                 </div>
               )}
               {summary.issues.length > 0 && (

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ISOStandard, Auditor, Process, AuditSegment, AuditorSummary } from '@/types/audit';
+import { ISOStandard, Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement } from '@/types/audit';
 import { calculateAuditorSummary } from '@/lib/compliance';
 
 const ALL_STANDARDS: ISOStandard[] = ['ISO 9001', 'ISO 14001', 'ISO 45001'];
@@ -29,7 +29,11 @@ export function useAuditStore() {
 
   const removeAuditor = useCallback((id: string) => {
     setAuditors(prev => prev.filter(a => a.id !== id));
-    setSegments(prev => prev.filter(s => s.auditorId !== id));
+    // Remove auditor from all segments
+    setSegments(prev => prev.map(s => ({
+      ...s,
+      auditorIds: s.auditorIds.filter(aId => aId !== id)
+    })).filter(s => s.auditorIds.length > 0)); // Remove segments with no auditors
   }, []);
 
   const addProcess = useCallback((process: Omit<Process, 'id'>) => {
@@ -46,11 +50,29 @@ export function useAuditStore() {
   }, []);
 
   const addSegment = useCallback((segment: Omit<AuditSegment, 'id'>) => {
-    setSegments(prev => [...prev, { ...segment, id: crypto.randomUUID() }]);
+    // Ensure time values are rounded to increments
+    const normalizedSegment = {
+      ...segment,
+      startHour: roundToIncrement(segment.startHour),
+      duration: Math.max(TIME_INCREMENT, roundToIncrement(segment.duration)),
+      id: crypto.randomUUID()
+    };
+    setSegments(prev => [...prev, normalizedSegment]);
   }, []);
 
   const updateSegment = useCallback((id: string, updates: Partial<AuditSegment>) => {
-    setSegments(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    setSegments(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      const updated = { ...s, ...updates };
+      // Ensure time values are rounded
+      if (updates.startHour !== undefined) {
+        updated.startHour = roundToIncrement(updates.startHour);
+      }
+      if (updates.duration !== undefined) {
+        updated.duration = Math.max(TIME_INCREMENT, roundToIncrement(updates.duration));
+      }
+      return updated;
+    }));
   }, []);
 
   const removeSegment = useCallback((id: string) => {

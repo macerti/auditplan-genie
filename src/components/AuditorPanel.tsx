@@ -1,11 +1,17 @@
 import { useState } from 'react';
-import { Auditor, ISOStandard, AuditorSummary, ComplianceStatus } from '@/types/audit';
+import { Auditor, ISOStandard, AuditorSummary, ComplianceStatus, formatHours } from '@/types/audit';
+import { EAC_CODES, getEACCodeShort } from '@/data/eacCodes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, User } from 'lucide-react';
+import { Plus, Trash2, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface AuditorPanelProps {
   auditors: Auditor[];
@@ -15,8 +21,6 @@ interface AuditorPanelProps {
   onRemove: (id: string) => void;
   summaries: AuditorSummary[];
 }
-
-const EAC_CODES = ['EA-01', 'EA-02', 'EA-03', 'EA-04', 'EA-17', 'EA-18', 'EA-28', 'EA-29', 'EA-31', 'EA-33'];
 
 function getStatusClasses(status: ComplianceStatus) {
   switch (status) {
@@ -35,6 +39,7 @@ export function AuditorPanel({ auditors, selectedStandards, onAdd, onUpdate, onR
   const [eacCodes, setEacCodes] = useState<string[]>([]);
   const [qualifiedStandards, setQualifiedStandards] = useState<ISOStandard[]>([]);
   const [maxMandays, setMaxMandays] = useState(5);
+  const [eacExpanded, setEacExpanded] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,34 +100,45 @@ export function AuditorPanel({ auditors, selectedStandards, onAdd, onUpdate, onR
             </div>
           </div>
 
-          <div>
-            <Label className="block mb-2">EAC Sector Codes</Label>
-            <div className="flex flex-wrap gap-2">
-              {EAC_CODES.map(code => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => toggleEac(code)}
-                  className={cn(
-                    "px-2 py-1 text-xs font-mono border-2 transition-colors",
-                    eacCodes.includes(code)
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background border-border hover:bg-accent"
-                  )}
-                >
-                  {code}
-                </button>
-              ))}
+          <Collapsible open={eacExpanded} onOpenChange={setEacExpanded}>
+            <div className="flex items-center justify-between">
+              <Label className="block">EAC Sector Codes ({eacCodes.length} selected)</Label>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" type="button">
+                  {eacExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </Button>
+              </CollapsibleTrigger>
             </div>
-          </div>
+            <CollapsibleContent>
+              <div className="flex flex-wrap gap-1 mt-2 max-h-48 overflow-y-auto border p-2">
+                {EAC_CODES.map(eac => (
+                  <button
+                    key={eac.code}
+                    type="button"
+                    onClick={() => toggleEac(eac.code)}
+                    className={cn(
+                      "px-2 py-1 text-xs font-mono border transition-colors text-left",
+                      eacCodes.includes(eac.code)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background border-border hover:bg-accent"
+                    )}
+                    title={eac.name}
+                  >
+                    {getEACCodeShort(eac.code)}
+                  </button>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           <div>
             <Label htmlFor="max-mandays">Max Mandays</Label>
             <Input
               id="max-mandays"
               type="number"
-              min={1}
+              min={0.5}
               max={30}
+              step={0.5}
               value={maxMandays}
               onChange={e => setMaxMandays(Number(e.target.value))}
               className="border-2 w-24"
@@ -157,11 +173,13 @@ export function AuditorPanel({ auditors, selectedStandards, onAdd, onUpdate, onR
                 </div>
                 <div className="text-xs font-mono space-y-1 text-muted-foreground">
                   <div>Standards: {auditor.qualifiedStandards.join(', ') || 'None'}</div>
-                  <div>EAC: {auditor.eacCodes.join(', ') || 'None'}</div>
+                  <div className="truncate" title={auditor.eacCodes.map(c => getEACCodeShort(c)).join(', ')}>
+                    EAC: {auditor.eacCodes.length > 0 ? auditor.eacCodes.map(c => getEACCodeShort(c)).join(', ') : 'None'}
+                  </div>
                   <div>
-                    Mandays: {summary ? `${summary.mandaysUsed.toFixed(1)}` : '0'} / {auditor.maxMandays}
+                    Mandays: {summary ? `${summary.mandaysUsed.toFixed(2)}` : '0'} / {auditor.maxMandays}
                     {summary && (
-                      <span className="ml-2">({summary.totalHours}h)</span>
+                      <span className="ml-2">({formatHours(summary.totalHours)})</span>
                     )}
                   </div>
                 </div>

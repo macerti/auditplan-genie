@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { AuditSegment, Auditor, Process, AuditorSummary, ComplianceStatus } from '@/types/audit';
+import { AuditSegment, Auditor, Process, AuditorSummary, ComplianceStatus, TIME_INCREMENT, formatHours, roundToIncrement } from '@/types/audit';
 import { getSegmentComplianceStatus } from '@/lib/compliance';
 import { cn } from '@/lib/utils';
 import {
@@ -10,7 +10,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Trash2, Plus } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Trash2, Plus, X } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 
 interface GanttChartProps {
   segments: AuditSegment[];
@@ -24,9 +26,10 @@ interface GanttChartProps {
 }
 
 const HOURS_PER_DAY = 8;
-const HOUR_WIDTH = 60;
-const ROW_HEIGHT = 48;
-const LEFT_LABEL_WIDTH = 200;
+const HOUR_WIDTH = 80; // Wider to accommodate 0.25h precision
+const QUARTER_WIDTH = HOUR_WIDTH / 4;
+const ROW_HEIGHT = 56;
+const LEFT_LABEL_WIDTH = 240;
 
 function getStatusColor(status: ComplianceStatus) {
   switch (status) {
@@ -53,7 +56,7 @@ export function GanttChart({
   const [dragging, setDragging] = useState<{ id: string; startX: number; originalStart: number } | null>(null);
   const [resizing, setResizing] = useState<{ id: string; startX: number; originalDuration: number } | null>(null);
   const [selectedProcess, setSelectedProcess] = useState<string>('');
-  const [selectedAuditor, setSelectedAuditor] = useState<string>('');
+  const [selectedAuditors, setSelectedAuditors] = useState<string[]>([]);
 
   const totalHours = days * HOURS_PER_DAY;
   const chartWidth = totalHours * HOUR_WIDTH;
@@ -73,16 +76,17 @@ export function GanttChart({
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (dragging) {
       const deltaX = e.clientX - dragging.startX;
-      const deltaHours = Math.round(deltaX / HOUR_WIDTH);
-      const newAbsoluteStart = Math.max(0, Math.min(totalHours - 1, dragging.originalStart + deltaHours));
-      const newDay = Math.floor(newAbsoluteStart / HOURS_PER_DAY) + 1;
-      const newStartHour = newAbsoluteStart % HOURS_PER_DAY;
+      const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
+      const newAbsoluteStart = Math.max(0, Math.min(totalHours - TIME_INCREMENT, dragging.originalStart + deltaHours));
+      const roundedStart = roundToIncrement(newAbsoluteStart);
+      const newDay = Math.floor(roundedStart / HOURS_PER_DAY) + 1;
+      const newStartHour = roundedStart % HOURS_PER_DAY;
       onUpdateSegment(dragging.id, { day: newDay, startHour: newStartHour });
     }
     if (resizing) {
       const deltaX = e.clientX - resizing.startX;
-      const deltaHours = Math.round(deltaX / HOUR_WIDTH);
-      const newDuration = Math.max(1, Math.min(8, resizing.originalDuration + deltaHours));
+      const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
+      const newDuration = Math.max(TIME_INCREMENT, Math.min(HOURS_PER_DAY, roundToIncrement(resizing.originalDuration + deltaHours)));
       onUpdateSegment(resizing.id, { duration: newDuration });
     }
   }, [dragging, resizing, totalHours, onUpdateSegment]);
@@ -92,56 +96,98 @@ export function GanttChart({
     setResizing(null);
   }, []);
 
+  const toggleAuditorSelection = (auditorId: string) => {
+    setSelectedAuditors(prev => 
+      prev.includes(auditorId) 
+        ? prev.filter(id => id !== auditorId)
+        : [...prev, auditorId]
+    );
+  };
+
   const handleAddSegment = () => {
-    if (!selectedProcess || !selectedAuditor) return;
+    if (!selectedProcess || selectedAuditors.length === 0) return;
     onAddSegment({
       processId: selectedProcess,
-      auditorId: selectedAuditor,
+      auditorIds: selectedAuditors,
       day: 1,
       startHour: 0,
       duration: 2
     });
     setSelectedProcess('');
-    setSelectedAuditor('');
+    setSelectedAuditors([]);
   };
 
-  // Group segments by row (process + auditor combination for display)
+  const removeAuditorFromSegment = (segmentId: string, auditorId: string) => {
+    const segment = segments.find(s => s.id === segmentId);
+    if (!segment) return;
+    const newAuditorIds = segment.auditorIds.filter(id => id !== auditorId);
+    if (newAuditorIds.length === 0) {
+      onRemoveSegment(segmentId);
+    } else {
+      onUpdateSegment(segmentId, { auditorIds: newAuditorIds });
+    }
+  };
+
+  // Group segments by row (process + segment combination for display)
   const segmentRows = segments.map((segment, idx) => ({
     segment,
     rowIndex: idx,
     process: processes.find(p => p.id === segment.processId),
-    auditor: auditors.find(a => a.id === segment.auditorId)
+    segmentAuditors: auditors.filter(a => segment.auditorIds.includes(a.id))
   }));
 
   return (
     <div className="border-2 border-border bg-card">
       <div className="border-b-2 border-border p-4 flex items-center gap-4 flex-wrap">
-        <h2 className="text-lg font-bold uppercase tracking-wide">Audit Schedule</h2>
-        <div className="flex items-center gap-2 ml-auto">
-          <Select value={selectedProcess} onValueChange={setSelectedProcess}>
-            <SelectTrigger className="w-40 border-2">
-              <SelectValue placeholder="Process" />
-            </SelectTrigger>
-            <SelectContent>
-              {processes.map(p => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={selectedAuditor} onValueChange={setSelectedAuditor}>
-            <SelectTrigger className="w-40 border-2">
-              <SelectValue placeholder="Auditor" />
-            </SelectTrigger>
-            <SelectContent>
+        <h2 className="text-lg font-bold uppercase tracking-wide">Audit Schedule (Process View)</h2>
+        <div className="text-xs font-mono text-muted-foreground">
+          Time precision: 0.25h (15 min)
+        </div>
+      </div>
+
+      {/* Add segment form */}
+      <div className="border-b-2 border-border p-4 bg-secondary/30">
+        <div className="flex items-start gap-4 flex-wrap">
+          <div>
+            <Label className="text-xs mb-1 block">Process</Label>
+            <Select value={selectedProcess} onValueChange={setSelectedProcess}>
+              <SelectTrigger className="w-48 border-2">
+                <SelectValue placeholder="Select process" />
+              </SelectTrigger>
+              <SelectContent>
+                {processes.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs mb-1 block">Auditors (multi-select)</Label>
+            <div className="flex flex-wrap gap-2 max-w-md">
               {auditors.map(a => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                <div key={a.id} className="flex items-center gap-1">
+                  <Checkbox
+                    id={`seg-aud-${a.id}`}
+                    checked={selectedAuditors.includes(a.id)}
+                    onCheckedChange={() => toggleAuditorSelection(a.id)}
+                    className="border-2"
+                  />
+                  <Label htmlFor={`seg-aud-${a.id}`} className="font-mono text-xs cursor-pointer">{a.name}</Label>
+                </div>
               ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={handleAddSegment} size="sm" disabled={!selectedProcess || !selectedAuditor} className="shadow-xs">
-            <Plus className="w-4 h-4 mr-1" />
-            Add Segment
-          </Button>
+            </div>
+          </div>
+          <div className="flex items-end">
+            <Button 
+              onClick={handleAddSegment} 
+              size="sm" 
+              disabled={!selectedProcess || selectedAuditors.length === 0} 
+              className="shadow-xs"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Segment
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -170,7 +216,7 @@ export function GanttChart({
         {/* Header row with hours */}
         <div className="flex border-b-2 border-border" style={{ minWidth: LEFT_LABEL_WIDTH + chartWidth }}>
           <div className="flex-shrink-0 border-r-2 border-border bg-secondary p-2 font-bold text-sm" style={{ width: LEFT_LABEL_WIDTH }}>
-            Process / Auditor
+            Process / Auditors
           </div>
           <div className="flex">
             {Array.from({ length: days }).map((_, dayIndex) => (
@@ -185,7 +231,7 @@ export function GanttChart({
                     style={{ width: HOUR_WIDTH }}
                   >
                     {hourIndex === 0 && <div className="font-bold mb-1">Day {dayIndex + 1}</div>}
-                    {hourIndex + 1}h
+                    {hourIndex}h
                   </div>
                 ))}
               </div>
@@ -199,9 +245,8 @@ export function GanttChart({
             No audit segments. Add processes and auditors, then create segments above.
           </div>
         ) : (
-          segmentRows.map(({ segment, rowIndex, process, auditor }) => {
-            const summary = summaries.find(s => s.auditorId === segment.auditorId);
-            const status = getSegmentComplianceStatus(segment, auditor, process, summary);
+          segmentRows.map(({ segment, rowIndex, process, segmentAuditors }) => {
+            const status = getSegmentComplianceStatus(segment, auditors, process, summaries);
             const absoluteStart = (segment.day - 1) * HOURS_PER_DAY + segment.startHour;
 
             return (
@@ -211,12 +256,27 @@ export function GanttChart({
                 style={{ minWidth: LEFT_LABEL_WIDTH + chartWidth, height: ROW_HEIGHT }}
               >
                 <div
-                  className="flex-shrink-0 border-r-2 border-border bg-secondary/50 p-2 text-xs font-mono flex items-center gap-2"
+                  className="flex-shrink-0 border-r-2 border-border bg-secondary/50 p-2 text-xs font-mono flex items-start justify-between gap-2"
                   style={{ width: LEFT_LABEL_WIDTH }}
                 >
-                  <div className="truncate flex-1">
+                  <div className="truncate flex-1 min-w-0">
                     <div className="font-bold truncate">{process?.name || 'Unknown'}</div>
-                    <div className="text-muted-foreground truncate">{auditor?.name || 'Unknown'}</div>
+                    <div className="text-muted-foreground truncate flex flex-wrap gap-1 mt-1">
+                      {segmentAuditors.map(a => (
+                        <span 
+                          key={a.id} 
+                          className="inline-flex items-center gap-0.5 bg-background px-1 py-0.5 border"
+                        >
+                          {a.name}
+                          <button
+                            onClick={() => removeAuditorFromSegment(segment.id, a.id)}
+                            className="hover:text-status-violation ml-0.5"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <Button
                     variant="outline"
@@ -228,7 +288,7 @@ export function GanttChart({
                   </Button>
                 </div>
                 <div className="relative flex-1" style={{ width: chartWidth }}>
-                  {/* Grid lines */}
+                  {/* Grid lines for days */}
                   {Array.from({ length: days }).map((_, dayIndex) => (
                     <div
                       key={dayIndex}
@@ -236,21 +296,35 @@ export function GanttChart({
                       style={{ left: dayIndex * HOURS_PER_DAY * HOUR_WIDTH }}
                     />
                   ))}
+                  
+                  {/* Quarter hour grid lines (subtle) */}
+                  {Array.from({ length: totalHours * 4 }).map((_, qIdx) => (
+                    qIdx % 4 !== 0 && (
+                      <div
+                        key={qIdx}
+                        className="absolute top-0 bottom-0 border-l border-border/10"
+                        style={{ left: qIdx * QUARTER_WIDTH }}
+                      />
+                    )
+                  ))}
 
                   {/* Segment bar */}
                   <div
                     className={cn(
-                      "absolute top-2 bottom-2 border-2 cursor-move flex items-center justify-center text-xs font-mono select-none",
+                      "absolute top-2 bottom-2 border-2 cursor-move flex items-center justify-between text-xs font-mono select-none px-2",
                       getStatusColor(status),
                       "text-primary-foreground"
                     )}
                     style={{
                       left: absoluteStart * HOUR_WIDTH,
-                      width: segment.duration * HOUR_WIDTH - 4
+                      width: Math.max(segment.duration * HOUR_WIDTH - 4, QUARTER_WIDTH)
                     }}
                     onMouseDown={e => handleMouseDown(e, segment.id, 'drag')}
                   >
-                    <span className="truncate px-1">{segment.duration}h</span>
+                    <span className="truncate">{formatHours(segment.duration)}</span>
+                    <span className="text-[10px] opacity-75">
+                      {formatHours(segment.startHour)}-{formatHours(segment.startHour + segment.duration)}
+                    </span>
                     {/* Resize handle */}
                     <div
                       className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-foreground/20"

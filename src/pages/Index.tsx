@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { useAuditStore } from '@/hooks/useAuditStore';
 import { StandardsSelector } from '@/components/StandardsSelector';
 import { AuditorPanel } from '@/components/AuditorPanel';
 import { ProcessPanel } from '@/components/ProcessPanel';
 import { GanttChart } from '@/components/GanttChart';
+import { AuditorLoadView } from '@/components/AuditorLoadView';
 import { SummaryPanel } from '@/components/SummaryPanel';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
   const {
@@ -41,7 +44,7 @@ const Index = () => {
             ISO Audit Planner
           </h1>
           <p className="text-muted-foreground font-mono text-sm mt-1">
-            Visual Gantt for audit compliance validation
+            Visual Gantt for audit compliance validation — 0.25h precision
           </p>
         </div>
       </header>
@@ -68,6 +71,9 @@ const Index = () => {
                 className="w-20 border-2"
               />
             </div>
+            <p className="text-xs text-muted-foreground font-mono mt-2">
+              Max 7h/day per auditor • 1 manday = 7h
+            </p>
           </div>
         </div>
 
@@ -94,17 +100,40 @@ const Index = () => {
 
         <Separator className="border-2" />
 
-        {/* Gantt Chart */}
-        <GanttChart
-          segments={segments}
-          auditors={auditors}
-          processes={processes}
-          summaries={summaries}
-          days={auditDays}
-          onAddSegment={addSegment}
-          onUpdateSegment={updateSegment}
-          onRemoveSegment={removeSegment}
-        />
+        {/* Gantt Views with Tabs */}
+        <Tabs defaultValue="process" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2 mb-4">
+            <TabsTrigger value="process" className="font-mono uppercase text-xs">
+              Process View
+            </TabsTrigger>
+            <TabsTrigger value="auditor" className="font-mono uppercase text-xs">
+              Auditor Load View
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="process">
+            <GanttChart
+              segments={segments}
+              auditors={auditors}
+              processes={processes}
+              summaries={summaries}
+              days={auditDays}
+              onAddSegment={addSegment}
+              onUpdateSegment={updateSegment}
+              onRemoveSegment={removeSegment}
+            />
+          </TabsContent>
+          
+          <TabsContent value="auditor">
+            <AuditorLoadView
+              segments={segments}
+              auditors={auditors}
+              processes={processes}
+              summaries={summaries}
+              days={auditDays}
+            />
+          </TabsContent>
+        </Tabs>
 
         <Separator className="border-2" />
 

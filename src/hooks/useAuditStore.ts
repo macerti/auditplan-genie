@@ -1,23 +1,41 @@
 import { useState, useCallback } from 'react';
-import { ISOStandard, Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement } from '@/types/audit';
+import { Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement, DEFAULT_START_HOUR } from '@/types/audit';
 import { calculateAuditorSummary } from '@/lib/compliance';
-
-const ALL_STANDARDS: ISOStandard[] = ['ISO 9001', 'ISO 14001', 'ISO 45001'];
+import { format } from 'date-fns';
 
 export function useAuditStore() {
-  const [selectedStandards, setSelectedStandards] = useState<ISOStandard[]>(['ISO 9001']);
   const [auditors, setAuditors] = useState<Auditor[]>([]);
   const [processes, setProcesses] = useState<Process[]>([]);
   const [segments, setSegments] = useState<AuditSegment[]>([]);
-  const [auditDays, setAuditDays] = useState<number>(3);
+  const [auditDates, setAuditDates] = useState<Date[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  const toggleStandard = useCallback((standard: ISOStandard) => {
-    setSelectedStandards(prev => 
-      prev.includes(standard) 
-        ? prev.filter(s => s !== standard)
-        : [...prev, standard]
-    );
-  }, []);
+  const addAuditDate = useCallback((date: Date) => {
+    setAuditDates(prev => {
+      const exists = prev.some(d => format(d, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd'));
+      if (exists) return prev;
+      const newDates = [...prev, date].sort((a, b) => a.getTime() - b.getTime());
+      // Auto-select first date if none selected
+      if (!selectedDate) {
+        setSelectedDate(newDates[0]);
+      }
+      return newDates;
+    });
+  }, [selectedDate]);
+
+  const removeAuditDate = useCallback((date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    setAuditDates(prev => prev.filter(d => format(d, 'yyyy-MM-dd') !== dateStr));
+    // Remove segments on this date
+    setSegments(prev => prev.filter(s => s.date !== dateStr));
+    // Update selected date if removed
+    if (selectedDate && format(selectedDate, 'yyyy-MM-dd') === dateStr) {
+      setSelectedDate(prev => {
+        const remaining = auditDates.filter(d => format(d, 'yyyy-MM-dd') !== dateStr);
+        return remaining.length > 0 ? remaining[0] : null;
+      });
+    }
+  }, [selectedDate, auditDates]);
 
   const addAuditor = useCallback((auditor: Omit<Auditor, 'id'>) => {
     setAuditors(prev => [...prev, { ...auditor, id: crypto.randomUUID() }]);
@@ -33,7 +51,7 @@ export function useAuditStore() {
     setSegments(prev => prev.map(s => ({
       ...s,
       auditorIds: s.auditorIds.filter(aId => aId !== id)
-    })).filter(s => s.auditorIds.length > 0)); // Remove segments with no auditors
+    })).filter(s => s.auditorIds.length > 0));
   }, []);
 
   const addProcess = useCallback((process: Omit<Process, 'id'>) => {
@@ -80,13 +98,10 @@ export function useAuditStore() {
   }, []);
 
   const getAuditorSummaries = useCallback((): AuditorSummary[] => {
-    return auditors.map(auditor => calculateAuditorSummary(auditor, segments, processes));
-  }, [auditors, segments, processes]);
+    return auditors.map(auditor => calculateAuditorSummary(auditor, segments));
+  }, [auditors, segments]);
 
   return {
-    allStandards: ALL_STANDARDS,
-    selectedStandards,
-    toggleStandard,
     auditors,
     addAuditor,
     updateAuditor,
@@ -99,8 +114,11 @@ export function useAuditStore() {
     addSegment,
     updateSegment,
     removeSegment,
-    auditDays,
-    setAuditDays,
+    auditDates,
+    addAuditDate,
+    removeAuditDate,
+    selectedDate,
+    setSelectedDate,
     getAuditorSummaries
   };
 }

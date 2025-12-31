@@ -1,5 +1,19 @@
 import { useRef, useState, useCallback } from 'react';
-import { AuditSegment, Auditor, Process, AuditorSummary, ComplianceStatus, TIME_INCREMENT, formatHours, roundToIncrement } from '@/types/audit';
+import { format } from 'date-fns';
+import { 
+  AuditSegment, 
+  Auditor, 
+  Process, 
+  AuditorSummary, 
+  ComplianceStatus, 
+  TIME_INCREMENT, 
+  formatHours, 
+  roundToIncrement,
+  formatTimeLabel,
+  DEFAULT_START_HOUR,
+  DEFAULT_END_HOUR,
+  parseDecimalInput
+} from '@/types/audit';
 import { getSegmentComplianceStatus } from '@/lib/compliance';
 import { cn } from '@/lib/utils';
 import {
@@ -11,7 +25,8 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, Plus, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Trash2, Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 
 interface GanttChartProps {
@@ -19,17 +34,20 @@ interface GanttChartProps {
   auditors: Auditor[];
   processes: Process[];
   summaries: AuditorSummary[];
-  days: number;
+  selectedDate: Date | null;
   onAddSegment: (segment: Omit<AuditSegment, 'id'>) => void;
   onUpdateSegment: (id: string, updates: Partial<AuditSegment>) => void;
   onRemoveSegment: (id: string) => void;
 }
 
-const HOURS_PER_DAY = 8;
-const HOUR_WIDTH = 80; // Wider to accommodate 0.25h precision
+// Timeline configuration
+const TIMELINE_START = 6; // 06:00
+const TIMELINE_END = 18; // 18:00
+const TIMELINE_HOURS = TIMELINE_END - TIMELINE_START;
+const HOUR_WIDTH = 100; // pixels per hour
 const QUARTER_WIDTH = HOUR_WIDTH / 4;
-const ROW_HEIGHT = 56;
-const LEFT_LABEL_WIDTH = 240;
+const ROW_HEIGHT = 80;
+const FROZEN_COL_WIDTH = 200;
 
 function getStatusColor(status: ComplianceStatus) {
   switch (status) {
@@ -47,7 +65,7 @@ export function GanttChart({
   auditors,
   processes,
   summaries,
-  days,
+  selectedDate,
   onAddSegment,
   onUpdateSegment,
   onRemoveSegment
@@ -57,9 +75,11 @@ export function GanttChart({
   const [resizing, setResizing] = useState<{ id: string; startX: number; originalDuration: number } | null>(null);
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [selectedAuditors, setSelectedAuditors] = useState<string[]>([]);
+  const [newDurationInput, setNewDurationInput] = useState('2');
 
-  const totalHours = days * HOURS_PER_DAY;
-  const chartWidth = totalHours * HOUR_WIDTH;
+  const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+  const daySegments = segments.filter(s => s.date === dateStr);
+  const chartWidth = TIMELINE_HOURS * HOUR_WIDTH;
 
   const handleMouseDown = useCallback((e: React.MouseEvent, segmentId: string, type: 'drag' | 'resize') => {
     e.preventDefault();
@@ -67,7 +87,7 @@ export function GanttChart({
     if (!segment) return;
 
     if (type === 'drag') {
-      setDragging({ id: segmentId, startX: e.clientX, originalStart: segment.startHour + (segment.day - 1) * HOURS_PER_DAY });
+      setDragging({ id: segmentId, startX: e.clientX, originalStart: segment.startHour });
     } else {
       setResizing({ id: segmentId, startX: e.clientX, originalDuration: segment.duration });
     }
@@ -77,19 +97,16 @@ export function GanttChart({
     if (dragging) {
       const deltaX = e.clientX - dragging.startX;
       const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
-      const newAbsoluteStart = Math.max(0, Math.min(totalHours - TIME_INCREMENT, dragging.originalStart + deltaHours));
-      const roundedStart = roundToIncrement(newAbsoluteStart);
-      const newDay = Math.floor(roundedStart / HOURS_PER_DAY) + 1;
-      const newStartHour = roundedStart % HOURS_PER_DAY;
-      onUpdateSegment(dragging.id, { day: newDay, startHour: newStartHour });
+      const newStart = Math.max(0, roundToIncrement(dragging.originalStart + deltaHours));
+      onUpdateSegment(dragging.id, { startHour: newStart });
     }
     if (resizing) {
       const deltaX = e.clientX - resizing.startX;
       const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
-      const newDuration = Math.max(TIME_INCREMENT, Math.min(HOURS_PER_DAY, roundToIncrement(resizing.originalDuration + deltaHours)));
+      const newDuration = Math.max(TIME_INCREMENT, roundToIncrement(resizing.originalDuration + deltaHours));
       onUpdateSegment(resizing.id, { duration: newDuration });
     }
-  }, [dragging, resizing, totalHours, onUpdateSegment]);
+  }, [dragging, resizing, onUpdateSegment]);
 
   const handleMouseUp = useCallback(() => {
     setDragging(null);
@@ -105,13 +122,14 @@ export function GanttChart({
   };
 
   const handleAddSegment = () => {
-    if (!selectedProcess || selectedAuditors.length === 0) return;
+    if (!selectedProcess || selectedAuditors.length === 0 || !dateStr) return;
+    const duration = parseDecimalInput(newDurationInput) || 2;
     onAddSegment({
       processId: selectedProcess,
       auditorIds: selectedAuditors,
-      day: 1,
-      startHour: 0,
-      duration: 2
+      date: dateStr,
+      startHour: DEFAULT_START_HOUR,
+      duration
     });
     setSelectedProcess('');
     setSelectedAuditors([]);
@@ -128,19 +146,36 @@ export function GanttChart({
     }
   };
 
-  // Group segments by row (process + segment combination for display)
-  const segmentRows = segments.map((segment, idx) => ({
+  const handleDurationIncrement = (delta: number) => {
+    const current = parseDecimalInput(newDurationInput) || 0;
+    const newVal = Math.max(0.25, current + delta);
+    setNewDurationInput(newVal.toString());
+  };
+
+  // Group segments for display
+  const segmentRows = daySegments.map((segment, idx) => ({
     segment,
     rowIndex: idx,
     process: processes.find(p => p.id === segment.processId),
     segmentAuditors: auditors.filter(a => segment.auditorIds.includes(a.id))
   }));
 
+  if (!selectedDate) {
+    return (
+      <div className="border-2 border-border bg-card p-8 text-center">
+        <p className="text-muted-foreground font-mono">Select an audit day to view the schedule</p>
+      </div>
+    );
+  }
+
   return (
     <div className="border-2 border-border bg-card">
       <div className="border-b-2 border-border p-4 flex items-center gap-4 flex-wrap">
-        <h2 className="text-lg font-bold uppercase tracking-wide">Audit Schedule (Process View)</h2>
-        <div className="text-xs font-mono text-muted-foreground">
+        <h2 className="text-lg font-bold uppercase tracking-wide">Audit Schedule</h2>
+        <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
+          {format(selectedDate, 'EEEE, dd MMMM yyyy')}
+        </span>
+        <div className="text-xs font-mono text-muted-foreground ml-auto">
           Time precision: 0.25h (15 min)
         </div>
       </div>
@@ -160,6 +195,37 @@ export function GanttChart({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label className="text-xs mb-1 block">Duration (hours)</Label>
+            <div className="flex items-center gap-1">
+              <Input
+                value={newDurationInput}
+                onChange={e => setNewDurationInput(e.target.value)}
+                className="border-2 w-20"
+                placeholder="2"
+              />
+              <div className="flex flex-col">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-5 px-1 border"
+                  onClick={() => handleDurationIncrement(0.25)}
+                >
+                  <ChevronUp className="w-3 h-3" />
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-5 px-1 border"
+                  onClick={() => handleDurationIncrement(-0.25)}
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
           </div>
           <div>
             <Label className="text-xs mb-1 block">Auditors (multi-select)</Label>
@@ -191,10 +257,11 @@ export function GanttChart({
         </div>
       </div>
 
+      {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2 border-b-2 border-border text-sm">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-status-valid border-2 border-status-valid"></div>
-          <span className="font-mono">Valid</span>
+          <span className="font-mono">OK</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-status-warning border-2 border-status-warning"></div>
@@ -206,66 +273,34 @@ export function GanttChart({
         </div>
       </div>
 
-      <div
-        ref={containerRef}
-        className="overflow-x-auto"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      >
-        {/* Header row with hours */}
-        <div className="flex border-b-2 border-border" style={{ minWidth: LEFT_LABEL_WIDTH + chartWidth }}>
-          <div className="flex-shrink-0 border-r-2 border-border bg-secondary p-2 font-bold text-sm" style={{ width: LEFT_LABEL_WIDTH }}>
+      {/* Gantt chart with frozen column */}
+      <div className="flex">
+        {/* Frozen column */}
+        <div className="flex-shrink-0 border-r-2 border-border" style={{ width: FROZEN_COL_WIDTH }}>
+          {/* Header */}
+          <div className="h-12 border-b-2 border-border bg-secondary p-2 font-bold text-sm flex items-center">
             Process / Auditors
           </div>
-          <div className="flex">
-            {Array.from({ length: days }).map((_, dayIndex) => (
-              <div key={dayIndex} className="flex border-r-2 border-border last:border-r-0">
-                {Array.from({ length: HOURS_PER_DAY }).map((_, hourIndex) => (
-                  <div
-                    key={hourIndex}
-                    className={cn(
-                      "flex-shrink-0 text-center text-xs font-mono py-2 border-r border-border/50",
-                      hourIndex === 0 && "border-l-2 border-border"
-                    )}
-                    style={{ width: HOUR_WIDTH }}
-                  >
-                    {hourIndex === 0 && <div className="font-bold mb-1">Day {dayIndex + 1}</div>}
-                    {hourIndex}h
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Segment rows */}
-        {segmentRows.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground font-mono">
-            No audit segments. Add processes and auditors, then create segments above.
-          </div>
-        ) : (
-          segmentRows.map(({ segment, rowIndex, process, segmentAuditors }) => {
-            const status = getSegmentComplianceStatus(segment, auditors, process, summaries);
-            const absoluteStart = (segment.day - 1) * HOURS_PER_DAY + segment.startHour;
-
-            return (
+          {/* Rows */}
+          {segmentRows.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground font-mono text-sm">
+              No segments
+            </div>
+          ) : (
+            segmentRows.map(({ segment, process, segmentAuditors }) => (
               <div
                 key={segment.id}
-                className="flex border-b border-border/50 last:border-b-0"
-                style={{ minWidth: LEFT_LABEL_WIDTH + chartWidth, height: ROW_HEIGHT }}
+                className="border-b border-border/50 p-2 bg-secondary/50"
+                style={{ height: ROW_HEIGHT }}
               >
-                <div
-                  className="flex-shrink-0 border-r-2 border-border bg-secondary/50 p-2 text-xs font-mono flex items-start justify-between gap-2"
-                  style={{ width: LEFT_LABEL_WIDTH }}
-                >
-                  <div className="truncate flex-1 min-w-0">
-                    <div className="font-bold truncate">{process?.name || 'Unknown'}</div>
-                    <div className="text-muted-foreground truncate flex flex-wrap gap-1 mt-1">
+                <div className="flex items-start justify-between gap-1">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate">{process?.name || 'Unknown'}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
                       {segmentAuditors.map(a => (
                         <span 
                           key={a.id} 
-                          className="inline-flex items-center gap-0.5 bg-background px-1 py-0.5 border"
+                          className="inline-flex items-center gap-0.5 bg-background px-1 py-0.5 border text-xs"
                         >
                           {a.name}
                           <button
@@ -287,47 +322,127 @@ export function GanttChart({
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
-                <div className="relative flex-1" style={{ width: chartWidth }}>
-                  {/* Grid lines for days */}
-                  {Array.from({ length: days }).map((_, dayIndex) => (
-                    <div
-                      key={dayIndex}
-                      className="absolute top-0 bottom-0 border-l-2 border-border/30"
-                      style={{ left: dayIndex * HOURS_PER_DAY * HOUR_WIDTH }}
-                    />
-                  ))}
-                  
-                  {/* Quarter hour grid lines (subtle) */}
-                  {Array.from({ length: totalHours * 4 }).map((_, qIdx) => (
-                    qIdx % 4 !== 0 && (
-                      <div
-                        key={qIdx}
-                        className="absolute top-0 bottom-0 border-l border-border/10"
-                        style={{ left: qIdx * QUARTER_WIDTH }}
-                      />
-                    )
-                  ))}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Scrollable timeline */}
+        <div
+          ref={containerRef}
+          className="flex-1 overflow-x-auto"
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          <div style={{ minWidth: chartWidth }}>
+            {/* Timeline header with ruler */}
+            <div className="h-12 border-b-2 border-border bg-secondary flex relative">
+              {Array.from({ length: TIMELINE_HOURS }).map((_, hourIndex) => {
+                const hour = TIMELINE_START + hourIndex;
+                const isLunchHour = hour === 12;
+                const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
+                
+                return (
+                  <div
+                    key={hourIndex}
+                    className={cn(
+                      "flex-shrink-0 border-r border-border/30 relative",
+                      isLunchHour && "bg-muted/50",
+                      isOutsideWork && "bg-muted/30"
+                    )}
+                    style={{ width: HOUR_WIDTH }}
+                  >
+                    <div className={cn(
+                      "text-xs font-mono font-bold px-1 py-1",
+                      isOutsideWork && "text-muted-foreground"
+                    )}>
+                      {formatTimeLabel(hour)}
+                    </div>
+                    {/* Quarter hour marks */}
+                    <div className="absolute bottom-0 left-0 right-0 flex h-3">
+                      {[0, 1, 2, 3].map((q) => (
+                        <div 
+                          key={q} 
+                          className={cn(
+                            "flex-1 border-r",
+                            q === 0 ? "border-border" : "border-border/20"
+                          )}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Segment rows */}
+            {segmentRows.map(({ segment, process, segmentAuditors }) => {
+              const status = getSegmentComplianceStatus(segment, auditors, summaries);
+              const segmentLeft = (segment.startHour - TIMELINE_START) * HOUR_WIDTH;
+              const segmentWidth = segment.duration * HOUR_WIDTH;
+
+              return (
+                <div
+                  key={segment.id}
+                  className="border-b border-border/50 relative"
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  {/* Background grid */}
+                  <div className="absolute inset-0 flex">
+                    {Array.from({ length: TIMELINE_HOURS }).map((_, hourIndex) => {
+                      const hour = TIMELINE_START + hourIndex;
+                      const isLunchHour = hour === 12;
+                      const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
+                      
+                      return (
+                        <div
+                          key={hourIndex}
+                          className={cn(
+                            "flex-shrink-0 border-r relative",
+                            hourIndex === 0 ? "border-border" : "border-border/20",
+                            isLunchHour && "bg-muted/30",
+                            isOutsideWork && "bg-muted/20"
+                          )}
+                          style={{ width: HOUR_WIDTH }}
+                        >
+                          {/* Quarter hour lines */}
+                          {[1, 2, 3].map((q) => (
+                            <div
+                              key={q}
+                              className="absolute top-0 bottom-0 border-l border-border/10"
+                              style={{ left: q * QUARTER_WIDTH }}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   {/* Segment bar */}
                   <div
                     className={cn(
-                      "absolute top-2 bottom-2 border-2 cursor-move flex items-center justify-between text-xs font-mono select-none px-2",
+                      "absolute top-2 bottom-2 border-2 cursor-move flex flex-col justify-center text-xs font-mono select-none px-2 z-10",
                       getStatusColor(status),
                       "text-primary-foreground"
                     )}
                     style={{
-                      left: absoluteStart * HOUR_WIDTH,
-                      width: Math.max(segment.duration * HOUR_WIDTH - 4, QUARTER_WIDTH)
+                      left: Math.max(0, segmentLeft),
+                      width: Math.max(segmentWidth - 4, QUARTER_WIDTH)
                     }}
                     onMouseDown={e => handleMouseDown(e, segment.id, 'drag')}
                   >
-                    <span className="truncate">{formatHours(segment.duration)}</span>
-                    <span className="text-[10px] opacity-75">
-                      {formatHours(segment.startHour)}-{formatHours(segment.startHour + segment.duration)}
-                    </span>
+                    <div className="font-bold truncate">{process?.name}</div>
+                    <div className="flex items-center gap-2 text-[10px] opacity-90">
+                      <span>{formatTimeLabel(segment.startHour)}-{formatTimeLabel(segment.startHour + segment.duration)}</span>
+                      <span>({formatHours(segment.duration)})</span>
+                    </div>
+                    <div className="truncate text-[10px] opacity-75">
+                      {segmentAuditors.map(a => a.name).join(', ')}
+                    </div>
                     {/* Resize handle */}
                     <div
-                      className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-foreground/20"
+                      className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-foreground/20 hover:bg-foreground/40"
                       onMouseDown={e => {
                         e.stopPropagation();
                         handleMouseDown(e, segment.id, 'resize');
@@ -335,10 +450,17 @@ export function GanttChart({
                     />
                   </div>
                 </div>
+              );
+            })}
+
+            {/* Empty state row */}
+            {segmentRows.length === 0 && (
+              <div className="h-20 flex items-center justify-center text-muted-foreground font-mono text-sm">
+                Add processes and auditors, then create segments above
               </div>
-            );
-          })
-        )}
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

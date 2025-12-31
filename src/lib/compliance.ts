@@ -1,53 +1,14 @@
 import { 
   Auditor, 
-  Process, 
   AuditSegment, 
   ComplianceIssue, 
   ComplianceStatus, 
   AuditorSummary,
   HOURS_PER_DAY_LIMIT,
   HOURS_PER_MANDAY,
-  formatHours
+  formatHours,
+  formatTimeLabel
 } from '@/types/audit';
-
-export function checkAuditorQualification(
-  auditor: Auditor,
-  process: Process
-): ComplianceIssue[] {
-  const issues: ComplianceIssue[] = [];
-
-  // Check ISO standard qualifications
-  const missingStandards = process.requiredStandards.filter(
-    std => !auditor.qualifiedStandards.includes(std)
-  );
-
-  if (missingStandards.length > 0) {
-    issues.push({
-      type: 'qualification',
-      severity: 'violation',
-      message: `${auditor.name} is not qualified for: ${missingStandards.join(', ')}`,
-      auditorId: auditor.id
-    });
-  }
-
-  // Check EAC sector codes (only if process has EAC requirements)
-  if (process.requiredEacCodes.length > 0) {
-    const missingEacCodes = process.requiredEacCodes.filter(
-      code => !auditor.eacCodes.includes(code)
-    );
-
-    if (missingEacCodes.length > 0) {
-      issues.push({
-        type: 'eac',
-        severity: 'violation',
-        message: `${auditor.name} lacks EAC codes: ${missingEacCodes.map(c => `EA-${c}`).join(', ')}`,
-        auditorId: auditor.id
-      });
-    }
-  }
-
-  return issues;
-}
 
 // Check for time overlaps for a specific auditor
 export function checkAuditorOverlaps(
@@ -62,7 +23,7 @@ export function checkAuditorOverlaps(
       const segA = auditorSegments[i];
       const segB = auditorSegments[j];
 
-      if (segA.day !== segB.day) continue;
+      if (segA.date !== segB.date) continue;
 
       const startA = segA.startHour;
       const endA = segA.startHour + segA.duration;
@@ -74,7 +35,7 @@ export function checkAuditorOverlaps(
         issues.push({
           type: 'overlap',
           severity: 'violation',
-          message: `Time overlap on Day ${segA.day}: ${formatHours(startA)}-${formatHours(endA)} conflicts with ${formatHours(startB)}-${formatHours(endB)}`,
+          message: `Overlap: ${formatTimeLabel(startA)}-${formatTimeLabel(endA)} conflicts with ${formatTimeLabel(startB)}-${formatTimeLabel(endB)}`,
           auditorId,
           segmentId: segA.id
         });
@@ -87,31 +48,18 @@ export function checkAuditorOverlaps(
 
 export function calculateAuditorSummary(
   auditor: Auditor,
-  segments: AuditSegment[],
-  processes: Process[]
+  segments: AuditSegment[]
 ): AuditorSummary {
   // Find all segments where this auditor is assigned
   const auditorSegments = segments.filter(s => s.auditorIds.includes(auditor.id));
-  const dailyHours: Record<number, number> = {};
+  const dailyHours: Record<string, number> = {};
   let totalHours = 0;
   const issues: ComplianceIssue[] = [];
 
   auditorSegments.forEach(segment => {
     // Each auditor consumes the full duration individually
     totalHours += segment.duration;
-    dailyHours[segment.day] = (dailyHours[segment.day] || 0) + segment.duration;
-
-    // Check qualification for each segment
-    const process = processes.find(p => p.id === segment.processId);
-    if (process) {
-      const qualificationIssues = checkAuditorQualification(auditor, process);
-      qualificationIssues.forEach(issue => {
-        issue.segmentId = segment.id;
-        if (!issues.some(i => i.message === issue.message && i.segmentId === segment.id)) {
-          issues.push(issue);
-        }
-      });
-    }
+    dailyHours[segment.date] = (dailyHours[segment.date] || 0) + segment.duration;
   });
 
   // Check for time overlaps
@@ -123,19 +71,19 @@ export function calculateAuditorSummary(
   });
 
   // Check daily limits
-  Object.entries(dailyHours).forEach(([day, hours]) => {
+  Object.entries(dailyHours).forEach(([date, hours]) => {
     if (hours > HOURS_PER_DAY_LIMIT) {
       issues.push({
         type: 'daily_limit',
         severity: 'violation',
-        message: `Day ${day}: ${formatHours(hours)} exceeds ${HOURS_PER_DAY_LIMIT}h limit`,
+        message: `${date}: ${formatHours(hours)} exceeds ${HOURS_PER_DAY_LIMIT}h limit`,
         auditorId: auditor.id
       });
     } else if (hours > HOURS_PER_DAY_LIMIT - 1) {
       issues.push({
         type: 'daily_limit',
         severity: 'warning',
-        message: `Day ${day}: ${formatHours(hours)} approaching daily limit`,
+        message: `${date}: ${formatHours(hours)} approaching daily limit`,
         auditorId: auditor.id
       });
     }
@@ -181,10 +129,9 @@ export function calculateAuditorSummary(
 export function getSegmentComplianceStatus(
   segment: AuditSegment,
   auditors: Auditor[],
-  process: Process | undefined,
   summaries: AuditorSummary[]
 ): ComplianceStatus {
-  if (!process || segment.auditorIds.length === 0) return 'violation';
+  if (segment.auditorIds.length === 0) return 'violation';
 
   let worstStatus: ComplianceStatus = 'valid';
 
@@ -194,14 +141,9 @@ export function getSegmentComplianceStatus(
       return 'violation';
     }
 
-    const qualificationIssues = checkAuditorQualification(auditor, process);
-    if (qualificationIssues.some(i => i.severity === 'violation')) {
-      return 'violation';
-    }
-
     const summary = summaries.find(s => s.auditorId === auditorId);
     if (summary) {
-      const dayHours = summary.dailyHours[segment.day] || 0;
+      const dayHours = summary.dailyHours[segment.date] || 0;
       if (dayHours > HOURS_PER_DAY_LIMIT) return 'violation';
       if (summary.mandaysUsed > auditor.maxMandays) return 'violation';
       

@@ -1,21 +1,15 @@
-import { useState } from 'react';
 import { useAuditStore } from '@/hooks/useAuditStore';
-import { StandardsSelector } from '@/components/StandardsSelector';
+import { DateSelector } from '@/components/DateSelector';
 import { AuditorPanel } from '@/components/AuditorPanel';
 import { ProcessPanel } from '@/components/ProcessPanel';
 import { GanttChart } from '@/components/GanttChart';
 import { AuditorLoadView } from '@/components/AuditorLoadView';
 import { SummaryPanel } from '@/components/SummaryPanel';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Index = () => {
   const {
-    allStandards,
-    selectedStandards,
-    toggleStandard,
     auditors,
     addAuditor,
     updateAuditor,
@@ -28,8 +22,11 @@ const Index = () => {
     addSegment,
     updateSegment,
     removeSegment,
-    auditDays,
-    setAuditDays,
+    auditDates,
+    addAuditDate,
+    removeAuditDate,
+    selectedDate,
+    setSelectedDate,
     getAuditorSummaries
   } = useAuditStore();
 
@@ -44,38 +41,20 @@ const Index = () => {
             ISO Audit Planner
           </h1>
           <p className="text-muted-foreground font-mono text-sm mt-1">
-            Visual Gantt for audit compliance validation — 0.25h precision
+            Time-based audit scheduling with 0.25h precision — Workload & overlap control
           </p>
         </div>
       </header>
 
       <main className="container mx-auto p-4 space-y-6">
-        {/* Standards and Days Configuration */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <StandardsSelector
-            allStandards={allStandards}
-            selectedStandards={selectedStandards}
-            onToggle={toggleStandard}
-          />
-          <div className="border-2 border-border p-4 bg-card">
-            <h2 className="text-lg font-bold mb-3 uppercase tracking-wide">Audit Duration</h2>
-            <div className="flex items-center gap-3">
-              <Label htmlFor="audit-days" className="font-mono">Number of Days:</Label>
-              <Input
-                id="audit-days"
-                type="number"
-                min={1}
-                max={14}
-                value={auditDays}
-                onChange={e => setAuditDays(Math.max(1, Math.min(14, Number(e.target.value))))}
-                className="w-20 border-2"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground font-mono mt-2">
-              Max 7h/day per auditor • 1 manday = 7h
-            </p>
-          </div>
-        </div>
+        {/* Date Selection */}
+        <DateSelector
+          auditDates={auditDates}
+          selectedDate={selectedDate}
+          onAddDate={addAuditDate}
+          onRemoveDate={removeAuditDate}
+          onSelectDate={setSelectedDate}
+        />
 
         <Separator className="border-2" />
 
@@ -83,7 +62,6 @@ const Index = () => {
         <div className="grid lg:grid-cols-2 gap-4">
           <AuditorPanel
             auditors={auditors}
-            selectedStandards={selectedStandards}
             onAdd={addAuditor}
             onUpdate={updateAuditor}
             onRemove={removeAuditor}
@@ -91,7 +69,6 @@ const Index = () => {
           />
           <ProcessPanel
             processes={processes}
-            selectedStandards={selectedStandards}
             onAdd={addProcess}
             onUpdate={updateProcess}
             onRemove={removeProcess}
@@ -117,7 +94,7 @@ const Index = () => {
               auditors={auditors}
               processes={processes}
               summaries={summaries}
-              days={auditDays}
+              selectedDate={selectedDate}
               onAddSegment={addSegment}
               onUpdateSegment={updateSegment}
               onRemoveSegment={removeSegment}
@@ -130,7 +107,8 @@ const Index = () => {
               auditors={auditors}
               processes={processes}
               summaries={summaries}
-              days={auditDays}
+              selectedDate={selectedDate}
+              auditDates={auditDates}
             />
           </TabsContent>
         </Tabs>
@@ -138,13 +116,19 @@ const Index = () => {
         <Separator className="border-2" />
 
         {/* Compliance Summary */}
-        <SummaryPanel auditors={auditors} summaries={summaries} />
+        <SummaryPanel 
+          auditors={auditors} 
+          summaries={summaries} 
+          segments={segments}
+          processes={processes}
+          auditDates={auditDates}
+        />
       </main>
 
       {/* Footer */}
       <footer className="border-t-4 border-border bg-card p-4 mt-8">
         <div className="container mx-auto text-center text-sm font-mono text-muted-foreground">
-          ISO Audit Planning Tool — Compliance verification before approval
+          ISO Audit Planning Tool — Temporal coherence & manday constraint verification
         </div>
       </footer>
     </div>

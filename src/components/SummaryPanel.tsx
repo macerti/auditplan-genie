@@ -1,10 +1,16 @@
+import { format } from 'date-fns';
 import { Auditor, AuditorSummary, ComplianceStatus, formatHours } from '@/types/audit';
-import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { AuditSegment, Process } from '@/types/audit';
 
 interface SummaryPanelProps {
   auditors: Auditor[];
   summaries: AuditorSummary[];
+  segments: AuditSegment[];
+  processes: Process[];
+  auditDates: Date[];
 }
 
 function getStatusIcon(status: ComplianceStatus) {
@@ -29,7 +35,81 @@ function getStatusBorder(status: ComplianceStatus) {
   }
 }
 
-export function SummaryPanel({ auditors, summaries }: SummaryPanelProps) {
+function exportAuditPlan(segments: AuditSegment[], processes: Process[], auditors: Auditor[]) {
+  // Sort segments chronologically
+  const sortedSegments = [...segments].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return a.startHour - b.startHour;
+  });
+
+  const formatExportTime = (hour: number): string => {
+    const h = Math.floor(hour);
+    const m = Math.round((hour - h) * 60);
+    return `${h.toString().padStart(2, '0')}H${m.toString().padStart(2, '0')}`;
+  };
+
+  const rows = sortedSegments.map(segment => {
+    const process = processes.find(p => p.id === segment.processId);
+    const segmentAuditors = auditors.filter(a => segment.auditorIds.includes(a.id));
+    const date = new Date(segment.date);
+    
+    return {
+      date: format(date, 'dd MMM yyyy'),
+      time: `${formatExportTime(segment.startHour)}–${formatExportTime(segment.startHour + segment.duration)} (${formatHours(segment.duration)})`,
+      auditors: segmentAuditors.map(a => a.name).join(', '),
+      process: process?.name || 'Unknown',
+      contact: ''
+    };
+  });
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Audit Plan Export</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+    th { background-color: #f0f0f0; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Audit Plan</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Heure</th>
+        <th>Auditeur</th>
+        <th>Unités Organisationnelles et Fonctionnelles / Processus et Activités</th>
+        <th>Contact principal</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map(row => `
+        <tr>
+          <td>${row.date}</td>
+          <td>${row.time}</td>
+          <td>${row.auditors}</td>
+          <td>${row.process}</td>
+          <td>${row.contact}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+</body>
+</html>
+  `;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
+
+export function SummaryPanel({ auditors, summaries, segments, processes, auditDates }: SummaryPanelProps) {
   const totalViolations = summaries.reduce(
     (acc, s) => acc + s.issues.filter(i => i.severity === 'violation').length,
     0
@@ -43,9 +123,20 @@ export function SummaryPanel({ auditors, summaries }: SummaryPanelProps) {
 
   return (
     <div className="border-2 border-border p-4 bg-card">
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-lg font-bold uppercase tracking-wide">Compliance Summary</h2>
-        {getStatusIcon(overallStatus)}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold uppercase tracking-wide">Compliance Summary</h2>
+          {getStatusIcon(overallStatus)}
+        </div>
+        <Button 
+          onClick={() => exportAuditPlan(segments, processes, auditors)}
+          variant="outline"
+          className="border-2"
+          disabled={segments.length === 0}
+        >
+          <FileText className="w-4 h-4 mr-2" />
+          Export Audit Plan
+        </Button>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4 text-center">
@@ -63,6 +154,10 @@ export function SummaryPanel({ auditors, summaries }: SummaryPanelProps) {
         </div>
       </div>
 
+      <p className="text-xs text-muted-foreground font-mono mb-4">
+        Max 7h/day per auditor • 1 manday = 7h
+      </p>
+
       <div className="space-y-3">
         {summaries.map(summary => {
           const auditor = auditors.find(a => a.id === summary.auditorId);
@@ -75,21 +170,29 @@ export function SummaryPanel({ auditors, summaries }: SummaryPanelProps) {
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="font-bold">{auditor.name}</div>
-                {getStatusIcon(summary.status)}
+                <div className="flex items-center gap-2">
+                  {summary.status === 'valid' && summary.totalHours > 0 && (
+                    <span className="text-xs font-mono text-status-valid font-bold">OK</span>
+                  )}
+                  {getStatusIcon(summary.status)}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm font-mono mb-2">
-                <div>
-                  <span className="text-muted-foreground">Hours: </span>
-                  {formatHours(summary.totalHours)}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Mandays: </span>
-                  {summary.mandaysUsed.toFixed(2)} / {summary.maxMandays}
-                </div>
+              <div className="text-sm font-mono mb-2">
+                <span className="text-muted-foreground">Mandays: </span>
+                <span className="font-bold">{summary.mandaysUsed.toFixed(2)} / {summary.maxMandays}</span>
               </div>
               {Object.entries(summary.dailyHours).length > 0 && (
                 <div className="text-xs font-mono text-muted-foreground mb-2">
-                  Daily: {Object.entries(summary.dailyHours).map(([day, hours]) => `D${day}:${formatHours(hours)}`).join(', ')}
+                  {auditDates.map((date, idx) => {
+                    const dStr = format(date, 'yyyy-MM-dd');
+                    const hours = summary.dailyHours[dStr];
+                    if (!hours) return null;
+                    return (
+                      <span key={dStr} className="mr-2">
+                        D{idx + 1}: {formatHours(hours)}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
               {summary.issues.length > 0 && (

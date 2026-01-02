@@ -28,6 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Trash2, Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
 interface GanttChartProps {
   segments: AuditSegment[];
@@ -163,7 +164,9 @@ export function GanttChart({
   if (!selectedDate) {
     return (
       <div className="border-2 border-border bg-card p-8 text-center">
-        <p className="text-muted-foreground font-mono">Select an audit day to view the schedule</p>
+        <p className="text-muted-foreground font-mono">
+          <BilingualLabel labelKey="selectAuditDay" />
+        </p>
       </div>
     );
   }
@@ -171,12 +174,14 @@ export function GanttChart({
   return (
     <div className="border-2 border-border bg-card">
       <div className="border-b-2 border-border p-4 flex items-center gap-4 flex-wrap">
-        <h2 className="text-lg font-bold uppercase tracking-wide">Audit Schedule</h2>
+        <h2 className="text-lg font-bold uppercase tracking-wide">
+          <BilingualLabel labelKey="auditSchedule" />
+        </h2>
         <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
           {format(selectedDate, 'EEEE, dd MMMM yyyy')}
         </span>
         <div className="text-xs font-mono text-muted-foreground ml-auto">
-          Time precision: 0.25h (15 min)
+          <BilingualLabel labelKey="timePrecision" />
         </div>
       </div>
 
@@ -184,10 +189,12 @@ export function GanttChart({
       <div className="border-b-2 border-border p-4 bg-secondary/30">
         <div className="flex items-start gap-4 flex-wrap">
           <div>
-            <Label className="text-xs mb-1 block">Process</Label>
+            <Label className="text-xs mb-1 block">
+              <BilingualLabel labelKey="process" />
+            </Label>
             <Select value={selectedProcess} onValueChange={setSelectedProcess}>
               <SelectTrigger className="w-48 border-2">
-                <SelectValue placeholder="Select process" />
+                <SelectValue placeholder="Select process / Sélectionner" />
               </SelectTrigger>
               <SelectContent>
                 {processes.map(p => (
@@ -197,7 +204,9 @@ export function GanttChart({
             </Select>
           </div>
           <div>
-            <Label className="text-xs mb-1 block">Duration (hours)</Label>
+            <Label className="text-xs mb-1 block">
+              <BilingualLabel labelKey="durationHours" />
+            </Label>
             <div className="flex items-center gap-1">
               <Input
                 value={newDurationInput}
@@ -228,7 +237,9 @@ export function GanttChart({
             </div>
           </div>
           <div>
-            <Label className="text-xs mb-1 block">Auditors (multi-select)</Label>
+            <Label className="text-xs mb-1 block">
+              <BilingualLabel labelKey="multiSelect" />
+            </Label>
             <div className="flex flex-wrap gap-2 max-w-md">
               {auditors.map(a => (
                 <div key={a.id} className="flex items-center gap-1">
@@ -251,7 +262,7 @@ export function GanttChart({
               className="shadow-xs"
             >
               <Plus className="w-4 h-4 mr-1" />
-              Add Segment
+              <BilingualLabel labelKey="addSegment" showFr={false} />
             </Button>
           </div>
         </div>
@@ -261,15 +272,15 @@ export function GanttChart({
       <div className="flex items-center gap-4 px-4 py-2 border-b-2 border-border text-sm">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-status-valid border-2 border-status-valid"></div>
-          <span className="font-mono">OK</span>
+          <span className="font-mono"><BilingualLabel labelKey="ok" showFr={false} /></span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-status-warning border-2 border-status-warning"></div>
-          <span className="font-mono">Warning</span>
+          <span className="font-mono"><BilingualLabel labelKey="warning" showFr={false} /></span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-status-violation border-2 border-status-violation"></div>
-          <span className="font-mono">Violation</span>
+          <span className="font-mono"><BilingualLabel labelKey="violation" showFr={false} /></span>
         </div>
       </div>
 
@@ -279,12 +290,12 @@ export function GanttChart({
         <div className="flex-shrink-0 border-r-2 border-border" style={{ width: FROZEN_COL_WIDTH }}>
           {/* Header */}
           <div className="h-12 border-b-2 border-border bg-secondary p-2 font-bold text-sm flex items-center">
-            Process / Auditors
+            <BilingualLabel labelKey="processAuditors" />
           </div>
           {/* Rows */}
           {segmentRows.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground font-mono text-sm">
-              No segments
+              <BilingualLabel labelKey="noSegments" />
             </div>
           ) : (
             segmentRows.map(({ segment, process, segmentAuditors }) => (

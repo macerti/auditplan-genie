@@ -1,9 +1,11 @@
 import { format } from 'date-fns';
 import { Auditor, AuditorSummary, ComplianceStatus, formatHours } from '@/types/audit';
-import { AlertTriangle, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, FileText, Clock, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { AuditSegment, Process } from '@/types/audit';
+import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
+import { getDailyMetrics, formatSpan, DailyAuditMetrics } from '@/lib/dailyMetrics';
 
 interface SummaryPanelProps {
   auditors: Auditor[];
@@ -119,13 +121,27 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
     0
   );
 
-  const overallStatus: ComplianceStatus = totalViolations > 0 ? 'violation' : totalWarnings > 0 ? 'warning' : 'valid';
+  // Calculate daily metrics for all dates
+  const dailyMetrics: DailyAuditMetrics[] = auditDates.map(date => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return getDailyMetrics(segments, dateStr);
+  });
+
+  // Count span violations
+  const spanViolations = dailyMetrics.filter(m => m.spanStatus === 'violation').length;
+  const idleWarnings = dailyMetrics.filter(m => m.idleStatus === 'warning').length;
+
+  const overallStatus: ComplianceStatus = 
+    (totalViolations > 0 || spanViolations > 0) ? 'violation' : 
+    (totalWarnings > 0 || idleWarnings > 0) ? 'warning' : 'valid';
 
   return (
     <div className="border-2 border-border p-4 bg-card">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold uppercase tracking-wide">Compliance Summary</h2>
+          <h2 className="text-lg font-bold uppercase tracking-wide">
+            <BilingualLabel labelKey="complianceSummary" />
+          </h2>
           {getStatusIcon(overallStatus)}
         </div>
         <Button 
@@ -135,29 +151,91 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
           disabled={segments.length === 0}
         >
           <FileText className="w-4 h-4 mr-2" />
-          Export Audit Plan
+          <BilingualLabel labelKey="exportAuditPlan" showFr={false} />
         </Button>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-        <div className={cn("border-2 p-3", totalViolations > 0 ? "border-status-violation bg-status-violation-bg" : "border-border")}>
-          <div className="text-2xl font-bold font-mono">{totalViolations}</div>
-          <div className="text-xs uppercase text-muted-foreground">Violations</div>
+        <div className={cn("border-2 p-3", (totalViolations > 0 || spanViolations > 0) ? "border-status-violation bg-status-violation-bg" : "border-border")}>
+          <div className="text-2xl font-bold font-mono">{totalViolations + spanViolations}</div>
+          <div className="text-xs uppercase text-muted-foreground">
+            <BilingualLabel labelKey="violations" />
+          </div>
         </div>
-        <div className={cn("border-2 p-3", totalWarnings > 0 ? "border-status-warning bg-status-warning-bg" : "border-border")}>
-          <div className="text-2xl font-bold font-mono">{totalWarnings}</div>
-          <div className="text-xs uppercase text-muted-foreground">Warnings</div>
+        <div className={cn("border-2 p-3", (totalWarnings > 0 || idleWarnings > 0) ? "border-status-warning bg-status-warning-bg" : "border-border")}>
+          <div className="text-2xl font-bold font-mono">{totalWarnings + idleWarnings}</div>
+          <div className="text-xs uppercase text-muted-foreground">
+            <BilingualLabel labelKey="warnings" />
+          </div>
         </div>
         <div className={cn("border-2 p-3", overallStatus === 'valid' ? "border-status-valid bg-status-valid-bg" : "border-border")}>
           <div className="text-2xl font-bold font-mono">{summaries.filter(s => s.status === 'valid').length}</div>
-          <div className="text-xs uppercase text-muted-foreground">Compliant</div>
+          <div className="text-xs uppercase text-muted-foreground">
+            <BilingualLabel labelKey="compliant" />
+          </div>
         </div>
       </div>
 
       <p className="text-xs text-muted-foreground font-mono mb-4">
-        Max 7h/day per auditor • 1 manday = 7h
+        <BilingualText 
+          en="Max 7h/day per auditor • 1 manday = 7h • Span limit: 7h" 
+          fr="Max 7h/jour par auditeur • 1 jour-homme = 7h • Limite amplitude: 7h"
+        />
       </p>
 
+      {/* Daily Audit Span & Idle Time Section */}
+      {dailyMetrics.length > 0 && dailyMetrics.some(m => m.span > 0) && (
+        <div className="mb-4 border-2 border-border p-3">
+          <h3 className="font-bold text-sm mb-2 flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            <BilingualLabel labelKey="dailyAuditSpan" />
+          </h3>
+          <div className="space-y-2">
+            {auditDates.map((date, idx) => {
+              const metrics = dailyMetrics[idx];
+              if (metrics.span === 0) return null;
+              
+              return (
+                <div 
+                  key={metrics.date}
+                  className={cn(
+                    "border p-2 font-mono text-xs",
+                    metrics.spanStatus === 'violation' && "border-status-violation bg-status-violation-bg",
+                    metrics.spanStatus === 'valid' && "border-border"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">D{idx + 1}: {format(date, 'dd MMM')}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{formatSpan(metrics.spanStart, metrics.spanEnd)}</span>
+                      <span className={cn(
+                        "font-bold",
+                        metrics.spanStatus === 'violation' && "text-status-violation",
+                        metrics.spanStatus === 'valid' && "text-status-valid"
+                      )}>
+                        = {formatHours(metrics.span)}
+                      </span>
+                      {metrics.spanStatus === 'valid' && <CheckCircle className="w-3 h-3 text-status-valid" />}
+                      {metrics.spanStatus === 'violation' && <XCircle className="w-3 h-3 text-status-violation" />}
+                    </div>
+                  </div>
+                  {metrics.idleTime > 0 && (
+                    <div className="flex items-center justify-between mt-1 text-status-warning">
+                      <span className="flex items-center gap-1">
+                        <Activity className="w-3 h-3" />
+                        <BilingualText en="Idle time" fr="Temps mort" showFr={false} />
+                      </span>
+                      <span>{formatHours(metrics.idleTime)} {metrics.lunchDeducted && '(1h lunch deducted)'}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Auditor summaries */}
       <div className="space-y-3">
         {summaries.map(summary => {
           const auditor = auditors.find(a => a.id === summary.auditorId);
@@ -178,7 +256,9 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
                 </div>
               </div>
               <div className="text-sm font-mono mb-2">
-                <span className="text-muted-foreground">Mandays: </span>
+                <span className="text-muted-foreground">
+                  <BilingualText en="Mandays" fr="J-H" showFr={false} />:{' '}
+                </span>
                 <span className="font-bold">{summary.mandaysUsed.toFixed(2)} / {summary.maxMandays}</span>
               </div>
               {Object.entries(summary.dailyHours).length > 0 && (
@@ -214,7 +294,9 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
           );
         })}
         {summaries.length === 0 && (
-          <p className="text-muted-foreground text-sm font-mono">No auditor assignments yet</p>
+          <p className="text-muted-foreground text-sm font-mono">
+            <BilingualLabel labelKey="noAssignments" />
+          </p>
         )}
       </div>
     </div>

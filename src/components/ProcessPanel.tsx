@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Trash2, Cog } from 'lucide-react';
+import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
 interface ProcessPanelProps {
   processes: Process[];
@@ -27,17 +28,21 @@ export function ProcessPanel({ processes, onAdd, onUpdate, onRemove }: ProcessPa
   return (
     <div className="border-2 border-border p-4 bg-card">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold uppercase tracking-wide">Audit Processes</h2>
+        <h2 className="text-lg font-bold uppercase tracking-wide">
+          <BilingualLabel labelKey="auditProcesses" />
+        </h2>
         <Button onClick={() => setShowForm(!showForm)} size="sm" className="shadow-xs">
           <Plus className="w-4 h-4 mr-1" />
-          Add Process
+          <BilingualLabel labelKey="addProcess" showFr={false} />
         </Button>
       </div>
 
       {showForm && (
         <form onSubmit={handleSubmit} className="border-2 border-border p-4 mb-4 bg-secondary space-y-4">
           <div>
-            <Label htmlFor="process-name">Process Name</Label>
+            <Label htmlFor="process-name">
+              <BilingualLabel labelKey="processName" />
+            </Label>
             <Input
               id="process-name"
               value={name}
@@ -48,15 +53,21 @@ export function ProcessPanel({ processes, onAdd, onUpdate, onRemove }: ProcessPa
           </div>
 
           <div className="flex gap-2">
-            <Button type="submit" size="sm" className="shadow-xs">Save Process</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="shadow-xs">
+              <BilingualText en="Save Process" fr="Enregistrer" showFr={false} />
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowForm(false)}>
+              <BilingualText en="Cancel" fr="Annuler" showFr={false} />
+            </Button>
           </div>
         </form>
       )}
 
       <div className="space-y-2">
         {processes.length === 0 && (
-          <p className="text-muted-foreground text-sm font-mono">No processes defined</p>
+          <p className="text-muted-foreground text-sm font-mono">
+            <BilingualLabel labelKey="noProcesses" />
+          </p>
         )}
         {processes.map(process => (
           <div

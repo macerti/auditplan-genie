@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Trash2, User, ChevronUp, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
 interface AuditorPanelProps {
   auditors: Auditor[];
@@ -49,28 +50,34 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
   return (
     <div className="border-2 border-border p-4 bg-card">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold uppercase tracking-wide">Audit Team</h2>
+        <h2 className="text-lg font-bold uppercase tracking-wide">
+          <BilingualLabel labelKey="auditTeam" />
+        </h2>
         <Button onClick={() => setShowForm(!showForm)} size="sm" className="shadow-xs">
           <Plus className="w-4 h-4 mr-1" />
-          Add Auditor
+          <BilingualLabel labelKey="addAuditor" showFr={false} />
         </Button>
       </div>
 
       {showForm && (
         <form onSubmit={handleSubmit} className="border-2 border-border p-4 mb-4 bg-secondary space-y-4">
           <div>
-            <Label htmlFor="auditor-name">Name</Label>
+            <Label htmlFor="auditor-name">
+              <BilingualLabel labelKey="name" />
+            </Label>
             <Input
               id="auditor-name"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Auditor name"
+              placeholder="Auditor name / Nom de l'auditeur"
               className="border-2"
             />
           </div>
 
           <div>
-            <Label htmlFor="max-mandays">Max Mandays (0.25 increments)</Label>
+            <Label htmlFor="max-mandays">
+              <BilingualText en="Max Mandays (0.25 increments)" fr="Jours-homme max (incréments de 0,25)" />
+            </Label>
             <div className="flex items-center gap-1">
               <Input
                 id="max-mandays"
@@ -100,19 +107,30 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Use comma or dot as decimal (e.g., 3,5 or 3.5)</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              <BilingualText 
+                en="Use comma or dot as decimal (e.g., 3,5 or 3.5)" 
+                fr="Virgule ou point pour décimales (ex: 3,5 ou 3.5)"
+              />
+            </p>
           </div>
 
           <div className="flex gap-2">
-            <Button type="submit" size="sm" className="shadow-xs">Save Auditor</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="shadow-xs">
+              <BilingualText en="Save Auditor" fr="Enregistrer" showFr={false} />
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowForm(false)}>
+              <BilingualText en="Cancel" fr="Annuler" showFr={false} />
+            </Button>
           </div>
         </form>
       )}
 
       <div className="space-y-2">
         {auditors.length === 0 && (
-          <p className="text-muted-foreground text-sm font-mono">No auditors defined</p>
+          <p className="text-muted-foreground text-sm font-mono">
+            <BilingualLabel labelKey="noAuditors" />
+          </p>
         )}
         {auditors.map(auditor => {
           const summary = summaries.find(s => s.auditorId === auditor.id);
@@ -131,13 +149,16 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
                 </div>
                 <div className="text-xs font-mono space-y-1 text-muted-foreground">
                   <div>
-                    Mandays: {summary ? `${summary.mandaysUsed.toFixed(2)}` : '0'} / {auditor.maxMandays}
+                    <BilingualText en="Mandays" fr="J-H" showFr={false} />:{' '}
+                    {summary ? `${summary.mandaysUsed.toFixed(2)}` : '0'} / {auditor.maxMandays}
                     {summary && (
                       <span className="ml-2">({formatHours(summary.totalHours)})</span>
                     )}
                   </div>
                   {summary && summary.status === 'valid' && summary.totalHours > 0 && (
-                    <div className="text-status-valid font-bold">✓ COMPLIANT</div>
+                    <div className="text-status-valid font-bold">
+                      ✓ <BilingualLabel labelKey="compliant" showFr={false} />
+                    </div>
                   )}
                 </div>
               </div>

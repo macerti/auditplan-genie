@@ -13,6 +13,7 @@ import {
 } from '@/types/audit';
 import { getSegmentComplianceStatus } from '@/lib/compliance';
 import { cn } from '@/lib/utils';
+import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
 interface AuditorLoadViewProps {
   segments: AuditSegment[];
@@ -29,7 +30,7 @@ const TIMELINE_END = 18; // 18:00
 const TIMELINE_HOURS = TIMELINE_END - TIMELINE_START;
 const HOUR_WIDTH = 80;
 const QUARTER_WIDTH = HOUR_WIDTH / 4;
-const ROW_HEIGHT = 72;
+const AUDITOR_ROW_HEIGHT = 88; // Taller than other rows per spec 11.2
 const FROZEN_COL_WIDTH = 200;
 
 function getStatusColor(status: ComplianceStatus) {
@@ -68,7 +69,9 @@ export function AuditorLoadView({
   if (!selectedDate) {
     return (
       <div className="border-2 border-border bg-card p-8 text-center">
-        <p className="text-muted-foreground font-mono">Select an audit day to view auditor loads</p>
+        <p className="text-muted-foreground font-mono">
+          <BilingualLabel labelKey="selectAuditDay" />
+        </p>
       </div>
     );
   }
@@ -76,12 +79,17 @@ export function AuditorLoadView({
   return (
     <div className="border-2 border-border bg-card">
       <div className="border-b-2 border-border p-4 flex items-center gap-4 flex-wrap">
-        <h2 className="text-lg font-bold uppercase tracking-wide">Auditor Load View</h2>
+        <h2 className="text-lg font-bold uppercase tracking-wide">
+          <BilingualLabel labelKey="auditorLoadView" />
+        </h2>
         <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
           {format(selectedDate, 'EEEE, dd MMMM yyyy')}
         </span>
         <div className="text-xs font-mono text-muted-foreground ml-auto">
-          Capacity & availability control — Max {HOURS_PER_DAY_LIMIT}h/day
+          <BilingualText 
+            en={`Capacity & availability control — Max ${HOURS_PER_DAY_LIMIT}h/day`}
+            fr={`Contrôle capacité — Max ${HOURS_PER_DAY_LIMIT}h/jour`}
+          />
         </div>
       </div>
 
@@ -91,12 +99,12 @@ export function AuditorLoadView({
         <div className="flex-shrink-0 border-r-2 border-border" style={{ width: FROZEN_COL_WIDTH }}>
           {/* Header */}
           <div className="h-12 border-b-2 border-border bg-secondary p-2 font-bold text-sm flex items-center">
-            Auditor
+            <BilingualLabel labelKey="auditor" />
           </div>
-          {/* Auditor rows */}
+          {/* Auditor rows - TALLER per spec 11.2 */}
           {auditors.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground font-mono text-sm">
-              No auditors
+              <BilingualLabel labelKey="noAuditors" />
             </div>
           ) : (
             auditors.map(auditor => {
@@ -112,13 +120,24 @@ export function AuditorLoadView({
                       summary.status === 'violation' ? 'bg-status-violation-bg' : 'bg-status-warning-bg'
                     )
                   )}
-                  style={{ height: ROW_HEIGHT }}
+                  style={{ height: AUDITOR_ROW_HEIGHT }}
                 >
                   <div className="font-bold text-sm truncate">{auditor.name}</div>
-                  <div className="text-xs font-mono text-muted-foreground mt-1">
-                    <div>Today: <span className={cn("font-bold", getDailyStatusClass(dayHours))}>{formatHours(dayHours)}</span> / {HOURS_PER_DAY_LIMIT}h</div>
-                    <div>Total: {summary ? formatHours(summary.totalHours) : '0h'}</div>
-                    <div>MD: {summary ? summary.mandaysUsed.toFixed(2) : '0'} / {auditor.maxMandays}</div>
+                  <div className="text-xs font-mono text-muted-foreground mt-1 space-y-0.5">
+                    <div>
+                      <BilingualText en="Today" fr="Auj." showFr={false} />:{' '}
+                      <span className={cn("font-bold", getDailyStatusClass(dayHours))}>
+                        {formatHours(dayHours)}
+                      </span> / {HOURS_PER_DAY_LIMIT}h
+                    </div>
+                    <div>
+                      <BilingualText en="Total" fr="Total" showFr={false} />:{' '}
+                      {summary ? formatHours(summary.totalHours) : '0h'}
+                    </div>
+                    <div>
+                      <BilingualText en="MD" fr="JH" showFr={false} />:{' '}
+                      {summary ? summary.mandaysUsed.toFixed(2) : '0'} / {auditor.maxMandays}
+                    </div>
                   </div>
                   {/* Per-day breakdown */}
                   {summary && Object.keys(summary.dailyHours).length > 0 && (
@@ -190,7 +209,7 @@ export function AuditorLoadView({
               })}
             </div>
 
-            {/* Auditor rows */}
+            {/* Auditor rows - TALLER */}
             {auditors.map(auditor => {
               const auditorDaySegments = daySegments.filter(s => s.auditorIds.includes(auditor.id));
               const summary = summaries.find(s => s.auditorId === auditor.id);
@@ -199,7 +218,7 @@ export function AuditorLoadView({
                 <div
                   key={auditor.id}
                   className="border-b border-border/50 relative"
-                  style={{ height: ROW_HEIGHT }}
+                  style={{ height: AUDITOR_ROW_HEIGHT }}
                 >
                   {/* Background grid */}
                   <div className="absolute inset-0 flex">
@@ -271,7 +290,7 @@ export function AuditorLoadView({
             {/* Empty state */}
             {auditors.length === 0 && (
               <div className="h-20 flex items-center justify-center text-muted-foreground font-mono text-sm">
-                No auditors defined
+                <BilingualLabel labelKey="noAuditors" />
               </div>
             )}
           </div>

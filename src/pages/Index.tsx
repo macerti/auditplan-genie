@@ -7,6 +7,7 @@ import { AuditorLoadView } from '@/components/AuditorLoadView';
 import { SummaryPanel } from '@/components/SummaryPanel';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
 const Index = () => {
   const {
@@ -38,10 +39,10 @@ const Index = () => {
       <header className="border-b-4 border-border bg-card p-4">
         <div className="container mx-auto">
           <h1 className="text-2xl md:text-3xl font-bold uppercase tracking-tight">
-            ISO Audit Planner
+            <BilingualLabel labelKey="appTitle" />
           </h1>
           <p className="text-muted-foreground font-mono text-sm mt-1">
-            Time-based audit scheduling with 0.25h precision — Workload & overlap control
+            <BilingualLabel labelKey="appSubtitle" frClassName="block mt-0.5" />
           </p>
         </div>
       </header>
@@ -81,10 +82,10 @@ const Index = () => {
         <Tabs defaultValue="process" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2 mb-4">
             <TabsTrigger value="process" className="font-mono uppercase text-xs">
-              Process View
+              <BilingualLabel labelKey="processView" showFr={false} />
             </TabsTrigger>
             <TabsTrigger value="auditor" className="font-mono uppercase text-xs">
-              Auditor Load View
+              <BilingualLabel labelKey="auditorLoadView" showFr={false} />
             </TabsTrigger>
           </TabsList>
           
@@ -128,7 +129,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="border-t-4 border-border bg-card p-4 mt-8">
         <div className="container mx-auto text-center text-sm font-mono text-muted-foreground">
-          ISO Audit Planning Tool — Temporal coherence & manday constraint verification
+          <BilingualLabel labelKey="footer" />
         </div>
       </footer>
     </div>

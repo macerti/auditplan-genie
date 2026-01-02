@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
 interface DateSelectorProps {
   auditDates: Date[];
@@ -32,14 +33,16 @@ export function DateSelector({
 
   return (
     <div className="border-2 border-border p-4 bg-card">
-      <h2 className="text-lg font-bold mb-3 uppercase tracking-wide">Audit Days</h2>
+      <h2 className="text-lg font-bold mb-3 uppercase tracking-wide">
+        <BilingualLabel labelKey="auditDays" />
+      </h2>
       
       <div className="flex items-start gap-4 flex-wrap">
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="border-2">
               <CalendarIcon className="w-4 h-4 mr-2" />
-              Add Date
+              <BilingualLabel labelKey="addDate" showFr={false} />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -55,7 +58,9 @@ export function DateSelector({
 
         <div className="flex flex-wrap gap-2">
           {auditDates.length === 0 && (
-            <p className="text-muted-foreground text-sm font-mono">No dates selected</p>
+            <p className="text-muted-foreground text-sm font-mono">
+              <BilingualText en="No dates selected" fr="Aucune date sélectionnée" />
+            </p>
           )}
           {auditDates.map((date, idx) => {
             const dateStr = format(date, 'yyyy-MM-dd');
@@ -90,7 +95,10 @@ export function DateSelector({
       </div>
 
       <p className="text-xs text-muted-foreground font-mono mt-3">
-        Max 7h/day per auditor • 1 manday = 7h • Click a date to view/edit
+        <BilingualText 
+          en="Max 7h/day per auditor • 1 manday = 7h • Click a date to view/edit" 
+          fr="Max 7h/jour par auditeur • 1 jour-homme = 7h • Cliquer pour voir/éditer"
+        />
       </p>
     </div>
   );

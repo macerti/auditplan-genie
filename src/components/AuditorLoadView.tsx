@@ -13,6 +13,13 @@ import {
 } from '@/types/audit';
 import { getSegmentComplianceStatus } from '@/lib/compliance';
 import { cn } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
 interface AuditorLoadViewProps {
@@ -22,6 +29,7 @@ interface AuditorLoadViewProps {
   summaries: AuditorSummary[];
   selectedDate: Date | null;
   auditDates: Date[];
+  onSelectDate: (date: Date) => void;
 }
 
 // Timeline configuration
@@ -60,7 +68,8 @@ export function AuditorLoadView({
   processes,
   summaries,
   selectedDate,
-  auditDates
+  auditDates,
+  onSelectDate
 }: AuditorLoadViewProps) {
   const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
   const daySegments = segments.filter(s => s.date === dateStr);
@@ -82,9 +91,36 @@ export function AuditorLoadView({
         <h2 className="text-lg font-bold uppercase tracking-wide">
           <BilingualLabel labelKey="auditorLoadView" />
         </h2>
-        <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
-          {format(selectedDate, 'EEEE, dd MMMM yyyy')}
-        </span>
+
+        {/* Date (display + switch day) */}
+        {auditDates.length > 0 ? (
+          <Select
+            value={dateStr}
+            onValueChange={(val) => {
+              const next = auditDates.find(d => format(d, 'yyyy-MM-dd') === val);
+              if (next) onSelectDate(next);
+            }}
+          >
+            <SelectTrigger className="w-auto border-2 font-mono text-sm">
+              <SelectValue placeholder={format(selectedDate, 'EEEE, dd MMMM yyyy')} />
+            </SelectTrigger>
+            <SelectContent>
+              {auditDates.map((d, idx) => {
+                const dStr = format(d, 'yyyy-MM-dd');
+                return (
+                  <SelectItem key={dStr} value={dStr} className="font-mono">
+                    D{idx + 1}: {format(d, 'dd MMM yyyy')}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        ) : (
+          <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
+            {format(selectedDate, 'EEEE, dd MMMM yyyy')}
+          </span>
+        )}
+
         <div className="text-xs font-mono text-muted-foreground ml-auto">
           <BilingualText 
             en={`Capacity & availability control — Max ${HOURS_PER_DAY_LIMIT}h/day`}

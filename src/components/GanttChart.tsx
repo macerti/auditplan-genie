@@ -1,13 +1,13 @@
-import { useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { format } from 'date-fns';
-import { 
-  AuditSegment, 
-  Auditor, 
-  Process, 
-  AuditorSummary, 
-  ComplianceStatus, 
-  TIME_INCREMENT, 
-  formatHours, 
+import {
+  AuditSegment,
+  Auditor,
+  Process,
+  AuditorSummary,
+  ComplianceStatus,
+  TIME_INCREMENT,
+  formatHours,
   roundToIncrement,
   formatTimeLabel,
   DEFAULT_START_HOUR,
@@ -26,9 +26,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Trash2, Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Trash2, Plus, X, ChevronUp, ChevronDown, Pencil } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
+import { SegmentEditDialog } from '@/components/SegmentEditDialog';
 
 interface GanttChartProps {
   segments: AuditSegment[];
@@ -36,6 +37,8 @@ interface GanttChartProps {
   processes: Process[];
   summaries: AuditorSummary[];
   selectedDate: Date | null;
+  auditDates: Date[];
+  onSelectDate: (date: Date) => void;
   onAddSegment: (segment: Omit<AuditSegment, 'id'>) => void;
   onUpdateSegment: (id: string, updates: Partial<AuditSegment>) => void;
   onRemoveSegment: (id: string) => void;
@@ -67,22 +70,33 @@ export function GanttChart({
   processes,
   summaries,
   selectedDate,
+  auditDates,
+  onSelectDate,
   onAddSegment,
   onUpdateSegment,
   onRemoveSegment
 }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+
   const [dragging, setDragging] = useState<{ id: string; startX: number; originalStart: number } | null>(null);
   const [resizing, setResizing] = useState<{ id: string; startX: number; originalDuration: number } | null>(null);
+
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [selectedAuditors, setSelectedAuditors] = useState<string[]>([]);
+  const [newStartHourStr, setNewStartHourStr] = useState<string>(String(DEFAULT_START_HOUR));
+  const [newStartMinuteStr, setNewStartMinuteStr] = useState<string>('0');
   const [newDurationInput, setNewDurationInput] = useState('2');
+
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
 
   const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
   const daySegments = segments.filter(s => s.date === dateStr);
   const chartWidth = TIMELINE_HOURS * HOUR_WIDTH;
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, segmentId: string, type: 'drag' | 'resize') => {
+  const startHourOptions = useMemo(() => Array.from({ length: 24 }).map((_, h) => h), []);
+  const startMinuteOptions = useMemo(() => [0, 15, 30, 45], []);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent, segmentId: string, type: 'drag' | 'resize') => {
     e.preventDefault();
     const segment = segments.find(s => s.id === segmentId);
     if (!segment) return;
@@ -94,29 +108,46 @@ export function GanttChart({
     }
   }, [segments]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (dragging) {
-      const deltaX = e.clientX - dragging.startX;
-      const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
-      const newStart = Math.max(0, roundToIncrement(dragging.originalStart + deltaHours));
-      onUpdateSegment(dragging.id, { startHour: newStart });
-    }
-    if (resizing) {
-      const deltaX = e.clientX - resizing.startX;
-      const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
-      const newDuration = Math.max(TIME_INCREMENT, roundToIncrement(resizing.originalDuration + deltaHours));
-      onUpdateSegment(resizing.id, { duration: newDuration });
-    }
+  useEffect(() => {
+    if (!dragging && !resizing) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      // Prevent page/scroll gestures while interacting with segments on touch devices
+      e.preventDefault();
+
+      if (dragging) {
+        const deltaX = e.clientX - dragging.startX;
+        const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
+        const newStart = Math.max(0, roundToIncrement(dragging.originalStart + deltaHours));
+        onUpdateSegment(dragging.id, { startHour: newStart });
+      }
+      if (resizing) {
+        const deltaX = e.clientX - resizing.startX;
+        const deltaHours = roundToIncrement(deltaX / HOUR_WIDTH);
+        const newDuration = Math.max(TIME_INCREMENT, roundToIncrement(resizing.originalDuration + deltaHours));
+        onUpdateSegment(resizing.id, { duration: newDuration });
+      }
+    };
+
+    const handlePointerUp = () => {
+      setDragging(null);
+      setResizing(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove as any);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
   }, [dragging, resizing, onUpdateSegment]);
 
-  const handleMouseUp = useCallback(() => {
-    setDragging(null);
-    setResizing(null);
-  }, []);
-
   const toggleAuditorSelection = (auditorId: string) => {
-    setSelectedAuditors(prev => 
-      prev.includes(auditorId) 
+    setSelectedAuditors(prev =>
+      prev.includes(auditorId)
         ? prev.filter(id => id !== auditorId)
         : [...prev, auditorId]
     );
@@ -124,12 +155,15 @@ export function GanttChart({
 
   const handleAddSegment = () => {
     if (!selectedProcess || selectedAuditors.length === 0 || !dateStr) return;
+
     const duration = parseDecimalInput(newDurationInput) || 2;
+    const startHour = (Number(newStartHourStr) || DEFAULT_START_HOUR) + (Number(newStartMinuteStr) || 0) / 60;
+
     onAddSegment({
       processId: selectedProcess,
       auditorIds: selectedAuditors,
       date: dateStr,
-      startHour: DEFAULT_START_HOUR,
+      startHour,
       duration
     });
     setSelectedProcess('');
@@ -161,6 +195,12 @@ export function GanttChart({
     segmentAuditors: auditors.filter(a => segment.auditorIds.includes(a.id))
   }));
 
+  const editingSegment = editingSegmentId ? segments.find(s => s.id === editingSegmentId) || null : null;
+  const editingProcess = editingSegment ? processes.find(p => p.id === editingSegment.processId) : undefined;
+  const editingAuditorNames = editingSegment
+    ? auditors.filter(a => editingSegment.auditorIds.includes(a.id)).map(a => a.name).join(', ')
+    : '';
+
   if (!selectedDate) {
     return (
       <div className="border-2 border-border bg-card p-8 text-center">
@@ -177,9 +217,36 @@ export function GanttChart({
         <h2 className="text-lg font-bold uppercase tracking-wide">
           <BilingualLabel labelKey="auditSchedule" />
         </h2>
-        <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
-          {format(selectedDate, 'EEEE, dd MMMM yyyy')}
-        </span>
+
+        {/* Date (display + switch day) */}
+        {auditDates.length > 0 ? (
+          <Select
+            value={dateStr}
+            onValueChange={(val) => {
+              const next = auditDates.find(d => format(d, 'yyyy-MM-dd') === val);
+              if (next) onSelectDate(next);
+            }}
+          >
+            <SelectTrigger className="w-auto border-2 font-mono text-sm">
+              <SelectValue placeholder={format(selectedDate, 'EEEE, dd MMMM yyyy')} />
+            </SelectTrigger>
+            <SelectContent>
+              {auditDates.map((d, idx) => {
+                const dStr = format(d, 'yyyy-MM-dd');
+                return (
+                  <SelectItem key={dStr} value={dStr} className="font-mono">
+                    D{idx + 1}: {format(d, 'dd MMM yyyy')}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        ) : (
+          <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
+            {format(selectedDate, 'EEEE, dd MMMM yyyy')}
+          </span>
+        )}
+
         <div className="text-xs font-mono text-muted-foreground ml-auto">
           <BilingualLabel labelKey="timePrecision" />
         </div>
@@ -203,6 +270,40 @@ export function GanttChart({
               </SelectContent>
             </Select>
           </div>
+
+          <div>
+            <Label className="text-xs mb-1 block">
+              <BilingualText en="Start" fr="Début" />
+            </Label>
+            <div className="flex gap-2">
+              <Select value={newStartHourStr} onValueChange={setNewStartHourStr}>
+                <SelectTrigger className="w-20 border-2 font-mono">
+                  <SelectValue placeholder="08" />
+                </SelectTrigger>
+                <SelectContent>
+                  {startHourOptions.map((h) => (
+                    <SelectItem key={h} value={String(h)} className="font-mono">
+                      {String(h).padStart(2, '0')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={newStartMinuteStr} onValueChange={setNewStartMinuteStr}>
+                <SelectTrigger className="w-20 border-2 font-mono">
+                  <SelectValue placeholder="00" />
+                </SelectTrigger>
+                <SelectContent>
+                  {startMinuteOptions.map((m) => (
+                    <SelectItem key={m} value={String(m)} className="font-mono">
+                      {String(m).padStart(2, '0')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div>
             <Label className="text-xs mb-1 block">
               <BilingualLabel labelKey="durationHours" />
@@ -213,21 +314,22 @@ export function GanttChart({
                 onChange={e => setNewDurationInput(e.target.value)}
                 className="border-2 w-20"
                 placeholder="2"
+                inputMode="decimal"
               />
               <div className="flex flex-col">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   className="h-5 px-1 border"
                   onClick={() => handleDurationIncrement(0.25)}
                 >
                   <ChevronUp className="w-3 h-3" />
                 </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   className="h-5 px-1 border"
                   onClick={() => handleDurationIncrement(-0.25)}
                 >
@@ -236,6 +338,7 @@ export function GanttChart({
               </div>
             </div>
           </div>
+
           <div>
             <Label className="text-xs mb-1 block">
               <BilingualLabel labelKey="multiSelect" />
@@ -255,10 +358,10 @@ export function GanttChart({
             </div>
           </div>
           <div className="flex items-end">
-            <Button 
-              onClick={handleAddSegment} 
-              size="sm" 
-              disabled={!selectedProcess || selectedAuditors.length === 0} 
+            <Button
+              onClick={handleAddSegment}
+              size="sm"
+              disabled={!selectedProcess || selectedAuditors.length === 0}
               className="shadow-xs"
             >
               <Plus className="w-4 h-4 mr-1" />
@@ -309,8 +412,8 @@ export function GanttChart({
                     <div className="font-bold text-sm truncate">{process?.name || 'Unknown'}</div>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {segmentAuditors.map(a => (
-                        <span 
-                          key={a.id} 
+                        <span
+                          key={a.id}
                           className="inline-flex items-center gap-0.5 bg-background px-1 py-0.5 border text-xs"
                         >
                           {a.name}
@@ -324,14 +427,25 @@ export function GanttChart({
                       ))}
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onRemoveSegment(segment.id)}
-                    className="border flex-shrink-0 h-6 w-6 p-0"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingSegmentId(segment.id)}
+                      className="border flex-shrink-0 h-6 w-6 p-0"
+                      title="Edit"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRemoveSegment(segment.id)}
+                      className="border flex-shrink-0 h-6 w-6 p-0"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))
@@ -342,9 +456,6 @@ export function GanttChart({
         <div
           ref={containerRef}
           className="flex-1 overflow-x-auto"
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
         >
           <div style={{ minWidth: chartWidth }}>
             {/* Timeline header with ruler */}
@@ -353,7 +464,7 @@ export function GanttChart({
                 const hour = TIMELINE_START + hourIndex;
                 const isLunchHour = hour === 12;
                 const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
-                
+
                 return (
                   <div
                     key={hourIndex}
@@ -373,8 +484,8 @@ export function GanttChart({
                     {/* Quarter hour marks */}
                     <div className="absolute bottom-0 left-0 right-0 flex h-3">
                       {[0, 1, 2, 3].map((q) => (
-                        <div 
-                          key={q} 
+                        <div
+                          key={q}
                           className={cn(
                             "flex-1 border-r",
                             q === 0 ? "border-border" : "border-border/20"
@@ -405,7 +516,7 @@ export function GanttChart({
                       const hour = TIMELINE_START + hourIndex;
                       const isLunchHour = hour === 12;
                       const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
-                      
+
                       return (
                         <div
                           key={hourIndex}
@@ -433,7 +544,7 @@ export function GanttChart({
                   {/* Segment bar */}
                   <div
                     className={cn(
-                      "absolute top-2 bottom-2 border-2 cursor-move flex flex-col justify-center text-xs font-mono select-none px-2 z-10",
+                      "absolute top-2 bottom-2 border-2 cursor-move flex flex-col justify-center text-xs font-mono select-none px-2 z-10 touch-none",
                       getStatusColor(status),
                       "text-primary-foreground"
                     )}
@@ -441,7 +552,7 @@ export function GanttChart({
                       left: Math.max(0, segmentLeft),
                       width: Math.max(segmentWidth - 4, QUARTER_WIDTH)
                     }}
-                    onMouseDown={e => handleMouseDown(e, segment.id, 'drag')}
+                    onPointerDown={e => handlePointerDown(e, segment.id, 'drag')}
                   >
                     <div className="font-bold truncate">{process?.name}</div>
                     <div className="flex items-center gap-2 text-[10px] opacity-90">
@@ -453,10 +564,10 @@ export function GanttChart({
                     </div>
                     {/* Resize handle */}
                     <div
-                      className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-foreground/20 hover:bg-foreground/40"
-                      onMouseDown={e => {
+                      className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-foreground/20 hover:bg-foreground/40 touch-none"
+                      onPointerDown={e => {
                         e.stopPropagation();
-                        handleMouseDown(e, segment.id, 'resize');
+                        handlePointerDown(e, segment.id, 'resize');
                       }}
                     />
                   </div>
@@ -467,12 +578,27 @@ export function GanttChart({
             {/* Empty state row */}
             {segmentRows.length === 0 && (
               <div className="h-20 flex items-center justify-center text-muted-foreground font-mono text-sm">
-                Add processes and auditors, then create segments above
+                <BilingualText
+                  en="Add processes and auditors, then create segments above"
+                  fr="Ajoutez processus et auditeurs, puis créez des segments ci-dessus"
+                />
               </div>
             )}
           </div>
         </div>
       </div>
+
+      <SegmentEditDialog
+        open={!!editingSegmentId}
+        onOpenChange={(open) => setEditingSegmentId(open ? editingSegmentId : null)}
+        segment={editingSegment}
+        title={editingProcess?.name || 'Unknown'}
+        subtitle={editingSegment ? `${editingSegment.date} • ${editingAuditorNames}` : ''}
+        onSave={(updates) => {
+          if (!editingSegmentId) return;
+          onUpdateSegment(editingSegmentId, updates);
+        }}
+      />
     </div>
   );
 }

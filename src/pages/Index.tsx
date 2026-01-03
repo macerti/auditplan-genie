@@ -96,6 +96,8 @@ const Index = () => {
               processes={processes}
               summaries={summaries}
               selectedDate={selectedDate}
+              auditDates={auditDates}
+              onSelectDate={setSelectedDate}
               onAddSegment={addSegment}
               onUpdateSegment={updateSegment}
               onRemoveSegment={removeSegment}
@@ -110,6 +112,7 @@ const Index = () => {
               summaries={summaries}
               selectedDate={selectedDate}
               auditDates={auditDates}
+              onSelectDate={setSelectedDate}
             />
           </TabsContent>
         </Tabs>

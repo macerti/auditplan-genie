@@ -50,7 +50,7 @@ const TIMELINE_END = 18; // 18:00
 const TIMELINE_HOURS = TIMELINE_END - TIMELINE_START;
 const HOUR_WIDTH = 100; // pixels per hour
 const QUARTER_WIDTH = HOUR_WIDTH / 4;
-const ROW_HEIGHT = 80;
+const ROW_HEIGHT = 100; // Increased for better text visibility
 const FROZEN_COL_WIDTH = 200;
 
 function getStatusColor(status: ComplianceStatus) {

@@ -2,28 +2,41 @@ import { AuditSegment, formatHours, ComplianceStatus } from '@/types/audit';
 
 export interface DailyAuditMetrics {
   date: string;
-  span: number; // in hours
+  span: number; // elapsed time from first segment start to last segment end
+  effectiveAuditTime: number; // sum of all segment durations (actual audit time)
   spanStart: number; // earliest segment start
   spanEnd: number; // latest segment end
+  totalGaps: number; // all gaps between segments
   idleTime: number; // gaps minus 1h lunch
   lunchDeducted: boolean;
-  spanStatus: ComplianceStatus;
+  spanStatus: ComplianceStatus; // based on effective audit time and span with lunch
   idleStatus: ComplianceStatus;
 }
 
-const SPAN_LIMIT = 7; // Maximum audit span in hours
+const EFFECTIVE_AUDIT_LIMIT = 7; // Maximum effective audit hours (segments only)
+const SPAN_WITH_LUNCH_LIMIT = 8; // 7h audit + 1h lunch gap = 8h span allowed
 const LUNCH_DEDUCTION = 1; // 1 hour lunch deduction
 
 /**
- * Calculate Daily Audit Span (section 6.3)
- * = max(segment_end) - min(segment_start) for a given day
- * Accreditor-mandated KPI: span > 7h = violation
+ * Calculate Daily Audit Span and Effective Audit Time (section 6.3)
+ * span = max(segment_end) - min(segment_start) for a given day
+ * effectiveAuditTime = sum of all segment durations
+ * 
+ * Compliance rule:
+ * - If effectiveAuditTime > 7h → violation (too much actual audit)
+ * - If span > 8h → violation (even with lunch, presence is too long)
+ * - If span ≤ 8h AND effectiveAuditTime ≤ 7h AND there's ≥1h gap → compliant
  */
-export function calculateDailyAuditSpan(segments: AuditSegment[], date: string): { span: number; start: number; end: number } {
+export function calculateDailyAuditSpan(segments: AuditSegment[], date: string): { 
+  span: number; 
+  start: number; 
+  end: number; 
+  effectiveAuditTime: number;
+} {
   const daySegments = segments.filter(s => s.date === date);
   
   if (daySegments.length === 0) {
-    return { span: 0, start: 0, end: 0 };
+    return { span: 0, start: 0, end: 0, effectiveAuditTime: 0 };
   }
   
   const startTimes = daySegments.map(s => s.startHour);
@@ -33,7 +46,10 @@ export function calculateDailyAuditSpan(segments: AuditSegment[], date: string):
   const spanEnd = Math.max(...endTimes);
   const span = spanEnd - spanStart;
   
-  return { span, start: spanStart, end: spanEnd };
+  // Sum of all segment durations = effective audit time
+  const effectiveAuditTime = daySegments.reduce((sum, s) => sum + s.duration, 0);
+  
+  return { span, start: spanStart, end: spanEnd, effectiveAuditTime };
 }
 
 /**
@@ -41,13 +57,17 @@ export function calculateDailyAuditSpan(segments: AuditSegment[], date: string):
  * = sum of all gaps between consecutive segments within span, minus 1h lunch
  * This is an optimization KPI, not a compliance violation
  */
-export function calculateIdleAuditTime(segments: AuditSegment[], date: string): { idleTime: number; lunchDeducted: boolean } {
+export function calculateIdleAuditTime(segments: AuditSegment[], date: string): { 
+  idleTime: number; 
+  lunchDeducted: boolean;
+  totalGaps: number;
+} {
   const daySegments = segments
     .filter(s => s.date === date)
     .sort((a, b) => a.startHour - b.startHour);
   
   if (daySegments.length <= 1) {
-    return { idleTime: 0, lunchDeducted: false };
+    return { idleTime: 0, lunchDeducted: false, totalGaps: 0 };
   }
   
   // Calculate all gaps between consecutive segments
@@ -65,27 +85,48 @@ export function calculateIdleAuditTime(segments: AuditSegment[], date: string): 
   const lunchDeducted = totalGaps >= LUNCH_DEDUCTION;
   const idleTime = Math.max(0, totalGaps - LUNCH_DEDUCTION);
   
-  return { idleTime, lunchDeducted };
+  return { idleTime, lunchDeducted, totalGaps };
 }
 
 /**
  * Get all daily metrics for a specific date
  */
 export function getDailyMetrics(segments: AuditSegment[], date: string): DailyAuditMetrics {
-  const { span, start, end } = calculateDailyAuditSpan(segments, date);
-  const { idleTime, lunchDeducted } = calculateIdleAuditTime(segments, date);
+  const { span, start, end, effectiveAuditTime } = calculateDailyAuditSpan(segments, date);
+  const { idleTime, lunchDeducted, totalGaps } = calculateIdleAuditTime(segments, date);
   
-  // Span > 7h is a violation (accreditor-mandated)
-  const spanStatus: ComplianceStatus = span === 0 ? 'valid' : span > SPAN_LIMIT ? 'violation' : 'valid';
+  // Compliance logic:
+  // 1. Effective audit time (sum of segments) must be ≤ 7h
+  // 2. Total span can be up to 8h if there's at least 1h gap for lunch
+  // 3. If span > 8h → violation (too long presence even with lunch)
+  // 4. If effective audit > 7h → violation (too much actual audit time)
+  // 5. If span is 7-8h but no lunch gap (totalGaps < 1h) → violation
+  let spanStatus: ComplianceStatus = 'valid';
   
-  // Idle time is optimization only - warning if > 0
+  if (span > 0) {
+    if (effectiveAuditTime > EFFECTIVE_AUDIT_LIMIT) {
+      // More than 7h of actual audit work
+      spanStatus = 'violation';
+    } else if (span > SPAN_WITH_LUNCH_LIMIT) {
+      // Presence longer than 8h even with lunch
+      spanStatus = 'violation';
+    } else if (span > EFFECTIVE_AUDIT_LIMIT && totalGaps < LUNCH_DEDUCTION) {
+      // Span is 7-8h but no proper lunch gap
+      spanStatus = 'violation';
+    }
+    // Otherwise valid: span ≤ 8h with proper lunch gap, or span ≤ 7h
+  }
+  
+  // Idle time is optimization only - warning if > 0 (gaps beyond lunch)
   const idleStatus: ComplianceStatus = idleTime > 0 ? 'warning' : 'valid';
   
   return {
     date,
     span,
+    effectiveAuditTime,
     spanStart: start,
     spanEnd: end,
+    totalGaps,
     idleTime,
     lunchDeducted,
     spanStatus,

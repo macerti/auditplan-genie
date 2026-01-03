@@ -178,8 +178,8 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
 
       <p className="text-xs text-muted-foreground font-mono mb-4">
         <BilingualText 
-          en="Max 7h/day per auditor • 1 manday = 7h • Span limit: 7h" 
-          fr="Max 7h/jour par auditeur • 1 jour-homme = 7h • Limite amplitude: 7h"
+          en="Max 7h/day per auditor • 1 manday = 7h • Span limit: 8h (7h audit + 1h lunch)" 
+          fr="Max 7h/jour par auditeur • 1 jour-homme = 7h • Limite amplitude: 8h (7h audit + 1h pause)"
         />
       </p>
 
@@ -218,6 +218,15 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
                       {metrics.spanStatus === 'valid' && <CheckCircle className="w-3 h-3 text-status-valid" />}
                       {metrics.spanStatus === 'violation' && <XCircle className="w-3 h-3 text-status-violation" />}
                     </div>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    <BilingualText en="Effective audit" fr="Audit effectif" showFr={false} />: {formatHours(metrics.effectiveAuditTime)}
+                    {metrics.totalGaps > 0 && (
+                      <span className="ml-2">
+                        • <BilingualText en="Gaps" fr="Pauses" showFr={false} />: {formatHours(metrics.totalGaps)}
+                        {metrics.lunchDeducted && ' (1h lunch)'}
+                      </span>
+                    )}
                   </div>
                   {metrics.idleTime > 0 && (
                     <div className="flex items-center justify-between mt-1 text-status-warning">

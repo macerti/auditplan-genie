@@ -3,7 +3,7 @@ import { Auditor, AuditorSummary, ComplianceStatus, formatHours, parseDecimalInp
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, User, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, User, ChevronUp, ChevronDown, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 
@@ -30,6 +30,8 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [maxMandaysInput, setMaxMandaysInput] = useState('5');
+  const [editingAuditorId, setEditingAuditorId] = useState<string | null>(null);
+  const [editingMaxMandays, setEditingMaxMandays] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +47,32 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
     const current = parseDecimalInput(maxMandaysInput) || 0;
     const newVal = Math.max(0.25, current + delta);
     setMaxMandaysInput(newVal.toString());
+  };
+
+  const startEditingMandays = (auditor: Auditor) => {
+    setEditingAuditorId(auditor.id);
+    setEditingMaxMandays(auditor.maxMandays.toString());
+  };
+
+  const saveEditingMandays = () => {
+    if (!editingAuditorId) return;
+    const newMaxMandays = parseDecimalInput(editingMaxMandays);
+    if (newMaxMandays && newMaxMandays > 0) {
+      onUpdate(editingAuditorId, { maxMandays: newMaxMandays });
+    }
+    setEditingAuditorId(null);
+    setEditingMaxMandays('');
+  };
+
+  const cancelEditingMandays = () => {
+    setEditingAuditorId(null);
+    setEditingMaxMandays('');
+  };
+
+  const handleEditMandaysIncrement = (delta: number) => {
+    const current = parseDecimalInput(editingMaxMandays) || 0;
+    const newVal = Math.max(0.25, current + delta);
+    setEditingMaxMandays(newVal.toString());
   };
 
   return (
@@ -134,6 +162,8 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
         )}
         {auditors.map(auditor => {
           const summary = summaries.find(s => s.auditorId === auditor.id);
+          const isEditing = editingAuditorId === auditor.id;
+          
           return (
             <div
               key={auditor.id}
@@ -148,14 +178,75 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
                   <span className="font-bold">{auditor.name}</span>
                 </div>
                 <div className="text-xs font-mono space-y-1 text-muted-foreground">
-                  <div>
-                    <BilingualText en="Mandays" fr="J-H" showFr={false} />:{' '}
-                    {summary ? `${summary.mandaysUsed.toFixed(2)}` : '0'} / {auditor.maxMandays}
-                    {summary && (
-                      <span className="ml-2">({formatHours(summary.totalHours)})</span>
-                    )}
-                  </div>
-                  {summary && summary.status === 'valid' && summary.totalHours > 0 && (
+                  {isEditing ? (
+                    <div className="flex items-center gap-1">
+                      <BilingualText en="Max MD" fr="JH max" showFr={false} />:{' '}
+                      <Input
+                        value={editingMaxMandays}
+                        onChange={e => setEditingMaxMandays(e.target.value)}
+                        className="border w-16 h-6 text-xs px-1"
+                        inputMode="decimal"
+                        autoFocus
+                      />
+                      <div className="flex flex-col">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-4 px-0.5 border"
+                          onClick={() => handleEditMandaysIncrement(0.25)}
+                        >
+                          <ChevronUp className="w-2 h-2" />
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-4 px-0.5 border"
+                          onClick={() => handleEditMandaysIncrement(-0.25)}
+                        >
+                          <ChevronDown className="w-2 h-2" />
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={saveEditingMandays}
+                      >
+                        <Check className="w-3 h-3 text-status-valid" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={cancelEditingMandays}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <BilingualText en="Mandays" fr="J-H" showFr={false} />:{' '}
+                      {summary ? `${summary.mandaysUsed.toFixed(2)}` : '0'} / {auditor.maxMandays}
+                      {summary && (
+                        <span className="ml-2">({formatHours(summary.totalHours)})</span>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0 ml-1"
+                        onClick={() => startEditingMandays(auditor)}
+                        title="Edit max mandays"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                  {summary && summary.status === 'valid' && summary.totalHours > 0 && !isEditing && (
                     <div className="text-status-valid font-bold">
                       ✓ <BilingualLabel labelKey="compliant" showFr={false} />
                     </div>

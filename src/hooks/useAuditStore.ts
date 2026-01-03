@@ -4,8 +4,17 @@ import { calculateAuditorSummary } from '@/lib/compliance';
 import { format } from 'date-fns';
 
 export function useAuditStore() {
+  // Default realistic French process names
+  const defaultProcesses: Process[] = [
+    { id: crypto.randomUUID(), name: 'Réunion d\'ouverture' },
+    { id: crypto.randomUUID(), name: 'Management DG' },
+    { id: crypto.randomUUID(), name: 'Ressources Humaines' },
+    { id: crypto.randomUUID(), name: 'Achats' },
+    { id: crypto.randomUUID(), name: 'Amélioration' },
+  ];
+
   const [auditors, setAuditors] = useState<Auditor[]>([]);
-  const [processes, setProcesses] = useState<Process[]>([]);
+  const [processes, setProcesses] = useState<Process[]>(defaultProcesses);
   const [segments, setSegments] = useState<AuditSegment[]>([]);
   const [auditDates, setAuditDates] = useState<Date[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);

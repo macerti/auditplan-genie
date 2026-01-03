@@ -38,8 +38,8 @@ const TIMELINE_END = 18; // 18:00
 const TIMELINE_HOURS = TIMELINE_END - TIMELINE_START;
 const HOUR_WIDTH = 80;
 const QUARTER_WIDTH = HOUR_WIDTH / 4;
-const AUDITOR_ROW_HEIGHT = 88; // Taller than other rows per spec 11.2
-const FROZEN_COL_WIDTH = 200;
+const AUDITOR_ROW_HEIGHT = 110; // Taller than other rows per spec 11.2
+const FROZEN_COL_WIDTH = 220;
 
 function getStatusColor(status: ComplianceStatus) {
   switch (status) {

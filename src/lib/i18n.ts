@@ -43,7 +43,7 @@ export const labels = {
   mandays: { en: 'Mandays', fr: 'Jours-Homme' },
   
   // KPIs
-  dailyAuditSpan: { en: 'Daily Audit Span', fr: 'Amplitude Journalière' },
+  dailyAuditSpan: { en: 'Daily Audit Presence', fr: 'Présence Journalière' },
   idleAuditTime: { en: 'Idle Audit Time', fr: 'Temps Mort' },
   
   // Status

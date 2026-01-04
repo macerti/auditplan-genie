@@ -127,12 +127,12 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
     return getDailyMetrics(segments, dateStr);
   });
 
-  // Count span violations
-  const spanViolations = dailyMetrics.filter(m => m.spanStatus === 'violation').length;
+  // Count presence violations
+  const presenceViolations = dailyMetrics.filter(m => m.presenceStatus === 'violation').length;
   const idleWarnings = dailyMetrics.filter(m => m.idleStatus === 'warning').length;
 
-  const overallStatus: ComplianceStatus = 
-    (totalViolations > 0 || spanViolations > 0) ? 'violation' : 
+  const overallStatus: ComplianceStatus =
+    (totalViolations > 0 || presenceViolations > 0) ? 'violation' :
     (totalWarnings > 0 || idleWarnings > 0) ? 'warning' : 'valid';
 
   return (
@@ -156,8 +156,8 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-        <div className={cn("border-2 p-3", (totalViolations > 0 || spanViolations > 0) ? "border-status-violation bg-status-violation-bg" : "border-border")}>
-          <div className="text-2xl font-bold font-mono">{totalViolations + spanViolations}</div>
+        <div className={cn("border-2 p-3", (totalViolations > 0 || presenceViolations > 0) ? "border-status-violation bg-status-violation-bg" : "border-border")}>
+          <div className="text-2xl font-bold font-mono">{totalViolations + presenceViolations}</div>
           <div className="text-xs uppercase text-muted-foreground">
             <BilingualLabel labelKey="violations" />
           </div>
@@ -178,13 +178,13 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
 
       <p className="text-xs text-muted-foreground font-mono mb-4">
         <BilingualText 
-          en="Max 7h/day per auditor • 1 manday = 7h • Span limit: 8h (7h audit + 1h lunch)" 
-          fr="Max 7h/jour par auditeur • 1 jour-homme = 7h • Limite amplitude: 8h (7h audit + 1h pause)"
+          en="Daily audit presence must be 7h • Idle gaps allowed: 1h lunch" 
+          fr="La présence d'audit doit être de 7h • Pauses tolérées: 1h déjeuner"
         />
       </p>
 
-      {/* Daily Audit Span & Idle Time Section */}
-      {dailyMetrics.length > 0 && dailyMetrics.some(m => m.span > 0) && (
+      {/* Daily Audit Presence & Idle Time Section */}
+      {dailyMetrics.length > 0 && dailyMetrics.some(m => m.presence > 0) && (
         <div className="mb-4 border-2 border-border p-3">
           <h3 className="font-bold text-sm mb-2 flex items-center gap-2">
             <Clock className="w-4 h-4" />
@@ -193,41 +193,42 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
           <div className="space-y-2">
             {auditDates.map((date, idx) => {
               const metrics = dailyMetrics[idx];
-              if (metrics.span === 0) return null;
-              
+              if (metrics.presence === 0) return null;
+
               return (
-                <div 
+                <div
                   key={metrics.date}
                   className={cn(
                     "border p-2 font-mono text-xs",
-                    metrics.spanStatus === 'violation' && "border-status-violation bg-status-violation-bg",
-                    metrics.spanStatus === 'valid' && "border-border"
+                    metrics.presenceStatus === 'violation' && "border-status-violation bg-status-violation-bg",
+                    metrics.presenceStatus === 'valid' && "border-border"
                   )}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold">D{idx + 1}: {format(date, 'dd MMM')}</span>
                     <div className="flex items-center gap-2">
-                      <span>{formatSpan(metrics.spanStart, metrics.spanEnd)}</span>
-                      <span className={cn(
-                        "font-bold",
-                        metrics.spanStatus === 'violation' && "text-status-violation",
-                        metrics.spanStatus === 'valid' && "text-status-valid"
-                      )}>
-                        = {formatHours(metrics.span)}
+                      <span>{formatSpan(metrics.windowStart, metrics.windowEnd)}</span>
+                      <span
+                        className={cn(
+                          "font-bold",
+                          metrics.presenceStatus === 'violation' && "text-status-violation",
+                          metrics.presenceStatus === 'valid' && "text-status-valid"
+                        )}
+                      >
+                        = {formatHours(metrics.presence)}
                       </span>
-                      {metrics.spanStatus === 'valid' && <CheckCircle className="w-3 h-3 text-status-valid" />}
-                      {metrics.spanStatus === 'violation' && <XCircle className="w-3 h-3 text-status-violation" />}
+                      {metrics.presenceStatus === 'valid' && <CheckCircle className="w-3 h-3 text-status-valid" />}
+                      {metrics.presenceStatus === 'violation' && <XCircle className="w-3 h-3 text-status-violation" />}
                     </div>
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    <BilingualText en="Effective audit" fr="Audit effectif" showFr={false} />: {formatHours(metrics.effectiveAuditTime)}
-                    {metrics.totalGaps > 0 && (
-                      <span className="ml-2">
-                        • <BilingualText en="Gaps" fr="Pauses" showFr={false} />: {formatHours(metrics.totalGaps)}
-                        {metrics.lunchDeducted && ' (1h lunch)'}
-                      </span>
-                    )}
-                  </div>
+
+                  {metrics.totalGaps > 0 && (
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      <BilingualText en="Gaps" fr="Pauses" showFr={false} />: {formatHours(metrics.totalGaps)}
+                      {metrics.lunchDeducted && ' (1h lunch)'}
+                    </div>
+                  )}
+
                   {metrics.idleTime > 0 && (
                     <div className="flex items-center justify-between mt-1 text-status-warning">
                       <span className="flex items-center gap-1">

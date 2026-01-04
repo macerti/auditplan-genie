@@ -1,135 +1,144 @@
-import { AuditSegment, formatHours, ComplianceStatus } from '@/types/audit';
+import { AuditSegment, ComplianceStatus } from '@/types/audit';
 
 export interface DailyAuditMetrics {
   date: string;
-  span: number; // elapsed time from first segment start to last segment end
-  effectiveAuditTime: number; // sum of all segment durations (actual audit time)
-  spanStart: number; // earliest segment start
-  spanEnd: number; // latest segment end
-  totalGaps: number; // all gaps between segments
-  idleTime: number; // gaps minus 1h lunch
+
+  /**
+   * Total audit presence for the auditee (union of all segment time intervals).
+   * Parallel segments are NOT double-counted.
+   */
+  presence: number;
+
+  /**
+   * Elapsed window from first segment start to last segment end.
+   * This is only used for display + gap calculation.
+   */
+  windowSpan: number;
+  windowStart: number;
+  windowEnd: number;
+
+  /**
+   * Total gaps within the window (windowSpan - presence).
+   * Includes lunch and any other idle gaps.
+   */
+  totalGaps: number;
+
+  /**
+   * Idle time beyond the tolerated 1h lunch gap.
+   */
+  idleTime: number;
   lunchDeducted: boolean;
-  spanStatus: ComplianceStatus; // based on effective audit time and span with lunch
+
+  /**
+   * Compliance for daily audit presence (auditee perspective).
+   * - presence === 7h => OK
+   * - presence > 7h => violation
+   * - presence < 7h => violation (per user requirement)
+   */
+  presenceStatus: ComplianceStatus;
+
+  /**
+   * Idle time is optimization only - warning when gaps exceed lunch.
+   */
   idleStatus: ComplianceStatus;
 }
 
-const EFFECTIVE_AUDIT_LIMIT = 7; // Maximum effective audit hours (segments only)
-const SPAN_WITH_LUNCH_LIMIT = 8; // 7h audit + 1h lunch gap = 8h span allowed
-const LUNCH_DEDUCTION = 1; // 1 hour lunch deduction
+const REQUIRED_PRESENCE_HOURS = 7;
+const LUNCH_DEDUCTION_HOURS = 1;
 
-/**
- * Calculate Daily Audit Span and Effective Audit Time (section 6.3)
- * span = max(segment_end) - min(segment_start) for a given day
- * effectiveAuditTime = sum of all segment durations
- * 
- * Compliance rule:
- * - If effectiveAuditTime > 7h → violation (too much actual audit)
- * - If span > 8h → violation (even with lunch, presence is too long)
- * - If span ≤ 8h AND effectiveAuditTime ≤ 7h AND there's ≥1h gap → compliant
- */
-export function calculateDailyAuditSpan(segments: AuditSegment[], date: string): { 
-  span: number; 
-  start: number; 
-  end: number; 
-  effectiveAuditTime: number;
-} {
-  const daySegments = segments.filter(s => s.date === date);
-  
-  if (daySegments.length === 0) {
-    return { span: 0, start: 0, end: 0, effectiveAuditTime: 0 };
+function mergeIntervals(intervals: Array<{ start: number; end: number }>) {
+  if (intervals.length === 0) return [];
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+
+  const merged: Array<{ start: number; end: number }> = [{ ...sorted[0] }];
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = merged[merged.length - 1];
+    const curr = sorted[i];
+
+    if (curr.start <= prev.end) {
+      prev.end = Math.max(prev.end, curr.end);
+    } else {
+      merged.push({ ...curr });
+    }
   }
-  
-  const startTimes = daySegments.map(s => s.startHour);
-  const endTimes = daySegments.map(s => s.startHour + s.duration);
-  
-  const spanStart = Math.min(...startTimes);
-  const spanEnd = Math.max(...endTimes);
-  const span = spanEnd - spanStart;
-  
-  // Sum of all segment durations = effective audit time
-  const effectiveAuditTime = daySegments.reduce((sum, s) => sum + s.duration, 0);
-  
-  return { span, start: spanStart, end: spanEnd, effectiveAuditTime };
+
+  return merged;
 }
 
 /**
- * Calculate Idle Audit Time (section 6.4)
- * = sum of all gaps between consecutive segments within span, minus 1h lunch
- * This is an optimization KPI, not a compliance violation
+ * Daily audit presence for a given date.
+ * Presence = total covered time (union) across all segments.
  */
-export function calculateIdleAuditTime(segments: AuditSegment[], date: string): { 
-  idleTime: number; 
-  lunchDeducted: boolean;
+export function calculateDailyAuditPresence(
+  segments: AuditSegment[],
+  date: string
+): {
+  presence: number;
+  windowSpan: number;
+  start: number;
+  end: number;
   totalGaps: number;
 } {
-  const daySegments = segments
-    .filter(s => s.date === date)
-    .sort((a, b) => a.startHour - b.startHour);
-  
-  if (daySegments.length <= 1) {
-    return { idleTime: 0, lunchDeducted: false, totalGaps: 0 };
+  const daySegments = segments.filter(s => s.date === date);
+
+  if (daySegments.length === 0) {
+    return { presence: 0, windowSpan: 0, start: 0, end: 0, totalGaps: 0 };
   }
-  
-  // Calculate all gaps between consecutive segments
-  let totalGaps = 0;
-  for (let i = 0; i < daySegments.length - 1; i++) {
-    const currentEnd = daySegments[i].startHour + daySegments[i].duration;
-    const nextStart = daySegments[i + 1].startHour;
-    
-    if (nextStart > currentEnd) {
-      totalGaps += nextStart - currentEnd;
-    }
-  }
-  
-  // Deduct 1h for lunch if there are enough gaps
-  const lunchDeducted = totalGaps >= LUNCH_DEDUCTION;
-  const idleTime = Math.max(0, totalGaps - LUNCH_DEDUCTION);
-  
-  return { idleTime, lunchDeducted, totalGaps };
+
+  const intervals = daySegments.map(s => ({
+    start: s.startHour,
+    end: s.startHour + s.duration
+  }));
+
+  const start = Math.min(...intervals.map(i => i.start));
+  const end = Math.max(...intervals.map(i => i.end));
+  const windowSpan = end - start;
+
+  const merged = mergeIntervals(intervals);
+  const presence = merged.reduce((sum, i) => sum + (i.end - i.start), 0);
+
+  const totalGaps = Math.max(0, windowSpan - presence);
+
+  return { presence, windowSpan, start, end, totalGaps };
+}
+
+/**
+ * Idle Audit Time (optimization KPI)
+ * = gaps within the day window minus a tolerated 1h lunch.
+ */
+export function calculateIdleAuditTime(totalGaps: number): {
+  idleTime: number;
+  lunchDeducted: boolean;
+} {
+  const lunchDeducted = totalGaps >= LUNCH_DEDUCTION_HOURS;
+  const idleTime = Math.max(0, totalGaps - LUNCH_DEDUCTION_HOURS);
+  return { idleTime, lunchDeducted };
 }
 
 /**
  * Get all daily metrics for a specific date
  */
 export function getDailyMetrics(segments: AuditSegment[], date: string): DailyAuditMetrics {
-  const { span, start, end, effectiveAuditTime } = calculateDailyAuditSpan(segments, date);
-  const { idleTime, lunchDeducted, totalGaps } = calculateIdleAuditTime(segments, date);
-  
-  // Compliance logic:
-  // 1. Effective audit time (sum of segments) must be ≤ 7h
-  // 2. Total span can be up to 8h if there's at least 1h gap for lunch
-  // 3. If span > 8h → violation (too long presence even with lunch)
-  // 4. If effective audit > 7h → violation (too much actual audit time)
-  // 5. If span is 7-8h but no lunch gap (totalGaps < 1h) → violation
-  let spanStatus: ComplianceStatus = 'valid';
-  
-  if (span > 0) {
-    if (effectiveAuditTime > EFFECTIVE_AUDIT_LIMIT) {
-      // More than 7h of actual audit work
-      spanStatus = 'violation';
-    } else if (span > SPAN_WITH_LUNCH_LIMIT) {
-      // Presence longer than 8h even with lunch
-      spanStatus = 'violation';
-    } else if (span > EFFECTIVE_AUDIT_LIMIT && totalGaps < LUNCH_DEDUCTION) {
-      // Span is 7-8h but no proper lunch gap
-      spanStatus = 'violation';
-    }
-    // Otherwise valid: span ≤ 8h with proper lunch gap, or span ≤ 7h
+  const { presence, windowSpan, start, end, totalGaps } = calculateDailyAuditPresence(segments, date);
+  const { idleTime, lunchDeducted } = calculateIdleAuditTime(totalGaps);
+
+  let presenceStatus: ComplianceStatus = 'valid';
+  if (presence > 0) {
+    presenceStatus = presence === REQUIRED_PRESENCE_HOURS ? 'valid' : 'violation';
   }
-  
-  // Idle time is optimization only - warning if > 0 (gaps beyond lunch)
+
   const idleStatus: ComplianceStatus = idleTime > 0 ? 'warning' : 'valid';
-  
+
   return {
     date,
-    span,
-    effectiveAuditTime,
-    spanStart: start,
-    spanEnd: end,
+    presence,
+    windowSpan,
+    windowStart: start,
+    windowEnd: end,
     totalGaps,
     idleTime,
     lunchDeducted,
-    spanStatus,
+    presenceStatus,
     idleStatus
   };
 }
@@ -146,7 +155,7 @@ export function getAllDailyMetrics(segments: AuditSegment[], dates: Date[]): Dai
 }
 
 /**
- * Format span for display
+ * Format window for display
  */
 export function formatSpan(start: number, end: number): string {
   const formatTime = (hour: number): string => {
@@ -156,3 +165,4 @@ export function formatSpan(start: number, end: number): string {
   };
   return `${formatTime(start)} → ${formatTime(end)}`;
 }
+

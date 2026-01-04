@@ -147,9 +147,10 @@ export function getDailyMetrics(segments: AuditSegment[], date: string): DailyAu
  * Get metrics for all audit dates
  */
 export function getAllDailyMetrics(segments: AuditSegment[], dates: Date[]): DailyAuditMetrics[] {
-  const { format } = require('date-fns');
+  // Note: Use getDailyMetrics directly with formatted date strings
+  // to avoid circular imports
   return dates.map(date => {
-    const dateStr = format(date, 'yyyy-MM-dd');
+    const dateStr = date.toISOString().split('T')[0];
     return getDailyMetrics(segments, dateStr);
   });
 }

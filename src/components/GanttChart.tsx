@@ -5,13 +5,11 @@ import {
   Auditor,
   Process,
   AuditorSummary,
-  ComplianceStatus,
   TIME_INCREMENT,
   formatHours,
   roundToIncrement,
   formatTimeLabel,
   DEFAULT_START_HOUR,
-  DEFAULT_END_HOUR,
   parseDecimalInput
 } from '@/types/audit';
 import { getSegmentComplianceStatus } from '@/lib/compliance';
@@ -25,11 +23,25 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Trash2, Plus, X, ChevronUp, ChevronDown, Pencil } from 'lucide-react';
+import { Trash2, Plus, X, Pencil } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
 import { SegmentEditDialog } from '@/components/SegmentEditDialog';
+import { 
+  TimelineHeader, 
+  TimelineGrid, 
+  DateSwitcher, 
+  StatusLegend, 
+  SegmentBar 
+} from '@/components/gantt';
+import { DurationInput, TimeSelect } from '@/components/forms';
+import {
+  TIMELINE_START,
+  TIMELINE_HOURS,
+  HOUR_WIDTH,
+  GANTT_ROW_HEIGHT,
+  FROZEN_COL_WIDTH
+} from '@/constants/timeline';
 
 interface GanttChartProps {
   segments: AuditSegment[];
@@ -42,26 +54,6 @@ interface GanttChartProps {
   onAddSegment: (segment: Omit<AuditSegment, 'id'>) => void;
   onUpdateSegment: (id: string, updates: Partial<AuditSegment>) => void;
   onRemoveSegment: (id: string) => void;
-}
-
-// Timeline configuration
-const TIMELINE_START = 6; // 06:00
-const TIMELINE_END = 18; // 18:00
-const TIMELINE_HOURS = TIMELINE_END - TIMELINE_START;
-const HOUR_WIDTH = 100; // pixels per hour
-const QUARTER_WIDTH = HOUR_WIDTH / 4;
-const ROW_HEIGHT = 100; // Increased for better text visibility
-const FROZEN_COL_WIDTH = 200;
-
-function getStatusColor(status: ComplianceStatus) {
-  switch (status) {
-    case 'valid':
-      return 'bg-status-valid border-status-valid';
-    case 'warning':
-      return 'bg-status-warning border-status-warning';
-    case 'violation':
-      return 'bg-status-violation border-status-violation';
-  }
 }
 
 export function GanttChart({
@@ -93,9 +85,6 @@ export function GanttChart({
   const daySegments = segments.filter(s => s.date === dateStr);
   const chartWidth = TIMELINE_HOURS * HOUR_WIDTH;
 
-  const startHourOptions = useMemo(() => Array.from({ length: 24 }).map((_, h) => h), []);
-  const startMinuteOptions = useMemo(() => [0, 15, 30, 45], []);
-
   const handlePointerDown = useCallback((e: React.PointerEvent, segmentId: string, type: 'drag' | 'resize') => {
     e.preventDefault();
     const segment = segments.find(s => s.id === segmentId);
@@ -112,7 +101,6 @@ export function GanttChart({
     if (!dragging && !resizing) return;
 
     const handlePointerMove = (e: PointerEvent) => {
-      // Prevent page/scroll gestures while interacting with segments on touch devices
       e.preventDefault();
 
       if (dragging) {
@@ -181,16 +169,9 @@ export function GanttChart({
     }
   };
 
-  const handleDurationIncrement = (delta: number) => {
-    const current = parseDecimalInput(newDurationInput) || 0;
-    const newVal = Math.max(0.25, current + delta);
-    setNewDurationInput(newVal.toString());
-  };
-
   // Group segments for display
-  const segmentRows = daySegments.map((segment, idx) => ({
+  const segmentRows = daySegments.map((segment) => ({
     segment,
-    rowIndex: idx,
     process: processes.find(p => p.id === segment.processId),
     segmentAuditors: auditors.filter(a => segment.auditorIds.includes(a.id))
   }));
@@ -213,40 +194,16 @@ export function GanttChart({
 
   return (
     <div className="border-2 border-border bg-card">
+      {/* Header */}
       <div className="border-b-2 border-border p-4 flex items-center gap-4 flex-wrap">
         <h2 className="text-lg font-bold uppercase tracking-wide">
           <BilingualLabel labelKey="auditSchedule" />
         </h2>
-
-        {/* Date (display + switch day) */}
-        {auditDates.length > 0 ? (
-          <Select
-            value={dateStr}
-            onValueChange={(val) => {
-              const next = auditDates.find(d => format(d, 'yyyy-MM-dd') === val);
-              if (next) onSelectDate(next);
-            }}
-          >
-            <SelectTrigger className="w-auto border-2 font-mono text-sm">
-              <SelectValue placeholder={format(selectedDate, 'EEEE, dd MMMM yyyy')} />
-            </SelectTrigger>
-            <SelectContent>
-              {auditDates.map((d, idx) => {
-                const dStr = format(d, 'yyyy-MM-dd');
-                return (
-                  <SelectItem key={dStr} value={dStr} className="font-mono">
-                    D{idx + 1}: {format(d, 'dd MMM yyyy')}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        ) : (
-          <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
-            {format(selectedDate, 'EEEE, dd MMMM yyyy')}
-          </span>
-        )}
-
+        <DateSwitcher
+          selectedDate={selectedDate}
+          auditDates={auditDates}
+          onSelectDate={onSelectDate}
+        />
         <div className="text-xs font-mono text-muted-foreground ml-auto">
           <BilingualLabel labelKey="timePrecision" />
         </div>
@@ -275,68 +232,22 @@ export function GanttChart({
             <Label className="text-xs mb-1 block">
               <BilingualText en="Start" fr="Début" />
             </Label>
-            <div className="flex gap-2">
-              <Select value={newStartHourStr} onValueChange={setNewStartHourStr}>
-                <SelectTrigger className="w-20 border-2 font-mono">
-                  <SelectValue placeholder="08" />
-                </SelectTrigger>
-                <SelectContent>
-                  {startHourOptions.map((h) => (
-                    <SelectItem key={h} value={String(h)} className="font-mono">
-                      {String(h).padStart(2, '0')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={newStartMinuteStr} onValueChange={setNewStartMinuteStr}>
-                <SelectTrigger className="w-20 border-2 font-mono">
-                  <SelectValue placeholder="00" />
-                </SelectTrigger>
-                <SelectContent>
-                  {startMinuteOptions.map((m) => (
-                    <SelectItem key={m} value={String(m)} className="font-mono">
-                      {String(m).padStart(2, '0')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <TimeSelect
+              hourValue={newStartHourStr}
+              minuteValue={newStartMinuteStr}
+              onHourChange={setNewStartHourStr}
+              onMinuteChange={setNewStartMinuteStr}
+            />
           </div>
 
           <div>
             <Label className="text-xs mb-1 block">
               <BilingualLabel labelKey="durationHours" />
             </Label>
-            <div className="flex items-center gap-1">
-              <Input
-                value={newDurationInput}
-                onChange={e => setNewDurationInput(e.target.value)}
-                className="border-2 w-20"
-                placeholder="2"
-                inputMode="decimal"
-              />
-              <div className="flex flex-col">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-5 px-1 border"
-                  onClick={() => handleDurationIncrement(0.25)}
-                >
-                  <ChevronUp className="w-3 h-3" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-5 px-1 border"
-                  onClick={() => handleDurationIncrement(-0.25)}
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </Button>
-              </div>
-            </div>
+            <DurationInput
+              value={newDurationInput}
+              onChange={setNewDurationInput}
+            />
           </div>
 
           <div>
@@ -371,31 +282,15 @@ export function GanttChart({
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b-2 border-border text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-status-valid border-2 border-status-valid"></div>
-          <span className="font-mono"><BilingualLabel labelKey="ok" showFr={false} /></span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-status-warning border-2 border-status-warning"></div>
-          <span className="font-mono"><BilingualLabel labelKey="warning" showFr={false} /></span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-status-violation border-2 border-status-violation"></div>
-          <span className="font-mono"><BilingualLabel labelKey="violation" showFr={false} /></span>
-        </div>
-      </div>
+      <StatusLegend />
 
       {/* Gantt chart with frozen column */}
       <div className="flex">
         {/* Frozen column */}
         <div className="flex-shrink-0 border-r-2 border-border" style={{ width: FROZEN_COL_WIDTH }}>
-          {/* Header */}
           <div className="h-12 border-b-2 border-border bg-secondary p-2 font-bold text-sm flex items-center">
             <BilingualLabel labelKey="processAuditors" />
           </div>
-          {/* Rows */}
           {segmentRows.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground font-mono text-sm">
               <BilingualLabel labelKey="noSegments" />
@@ -405,7 +300,7 @@ export function GanttChart({
               <div
                 key={segment.id}
                 className="border-b border-border/50 p-2 bg-secondary/50"
-                style={{ height: ROW_HEIGHT }}
+                style={{ height: GANTT_ROW_HEIGHT }}
               >
                 <div className="flex items-start justify-between gap-1">
                   <div className="flex-1 min-w-0">
@@ -453,124 +348,30 @@ export function GanttChart({
         </div>
 
         {/* Scrollable timeline */}
-        <div
-          ref={containerRef}
-          className="flex-1 overflow-x-auto"
-        >
+        <div ref={containerRef} className="flex-1 overflow-x-auto">
           <div style={{ minWidth: chartWidth }}>
-            {/* Timeline header with ruler */}
-            <div className="h-12 border-b-2 border-border bg-secondary flex relative">
-              {Array.from({ length: TIMELINE_HOURS }).map((_, hourIndex) => {
-                const hour = TIMELINE_START + hourIndex;
-                const isLunchHour = hour === 12;
-                const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
-
-                return (
-                  <div
-                    key={hourIndex}
-                    className={cn(
-                      "flex-shrink-0 border-r border-border/30 relative",
-                      isLunchHour && "bg-muted/50",
-                      isOutsideWork && "bg-muted/30"
-                    )}
-                    style={{ width: HOUR_WIDTH }}
-                  >
-                    <div className={cn(
-                      "text-xs font-mono font-bold px-1 py-1",
-                      isOutsideWork && "text-muted-foreground"
-                    )}>
-                      {formatTimeLabel(hour)}
-                    </div>
-                    {/* Quarter hour marks */}
-                    <div className="absolute bottom-0 left-0 right-0 flex h-3">
-                      {[0, 1, 2, 3].map((q) => (
-                        <div
-                          key={q}
-                          className={cn(
-                            "flex-1 border-r",
-                            q === 0 ? "border-border" : "border-border/20"
-                          )}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <TimelineHeader />
 
             {/* Segment rows */}
             {segmentRows.map(({ segment, process, segmentAuditors }) => {
               const status = getSegmentComplianceStatus(segment, auditors, summaries);
-              const segmentLeft = (segment.startHour - TIMELINE_START) * HOUR_WIDTH;
-              const segmentWidth = segment.duration * HOUR_WIDTH;
 
               return (
                 <div
                   key={segment.id}
                   className="border-b border-border/50 relative"
-                  style={{ height: ROW_HEIGHT }}
+                  style={{ height: GANTT_ROW_HEIGHT }}
                 >
-                  {/* Background grid */}
-                  <div className="absolute inset-0 flex">
-                    {Array.from({ length: TIMELINE_HOURS }).map((_, hourIndex) => {
-                      const hour = TIMELINE_START + hourIndex;
-                      const isLunchHour = hour === 12;
-                      const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
-
-                      return (
-                        <div
-                          key={hourIndex}
-                          className={cn(
-                            "flex-shrink-0 border-r relative",
-                            hourIndex === 0 ? "border-border" : "border-border/20",
-                            isLunchHour && "bg-muted/30",
-                            isOutsideWork && "bg-muted/20"
-                          )}
-                          style={{ width: HOUR_WIDTH }}
-                        >
-                          {/* Quarter hour lines */}
-                          {[1, 2, 3].map((q) => (
-                            <div
-                              key={q}
-                              className="absolute top-0 bottom-0 border-l border-border/10"
-                              style={{ left: q * QUARTER_WIDTH }}
-                            />
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Segment bar */}
-                  <div
-                    className={cn(
-                      "absolute top-2 bottom-2 border-2 cursor-move flex flex-col justify-center text-xs font-mono select-none px-2 z-10 touch-none",
-                      getStatusColor(status),
-                      "text-primary-foreground"
-                    )}
-                    style={{
-                      left: Math.max(0, segmentLeft),
-                      width: Math.max(segmentWidth - 4, QUARTER_WIDTH)
-                    }}
+                  <TimelineGrid />
+                  <SegmentBar
+                    startHour={segment.startHour}
+                    duration={segment.duration}
+                    status={status}
+                    processName={process?.name}
+                    auditorNames={segmentAuditors.map(a => a.name).join(', ')}
                     onPointerDown={e => handlePointerDown(e, segment.id, 'drag')}
-                  >
-                    <div className="font-bold truncate">{process?.name}</div>
-                    <div className="flex items-center gap-2 text-[10px] opacity-90">
-                      <span>{formatTimeLabel(segment.startHour)}-{formatTimeLabel(segment.startHour + segment.duration)}</span>
-                      <span>({formatHours(segment.duration)})</span>
-                    </div>
-                    <div className="truncate text-[10px] opacity-75">
-                      {segmentAuditors.map(a => a.name).join(', ')}
-                    </div>
-                    {/* Resize handle */}
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-foreground/20 hover:bg-foreground/40 touch-none"
-                      onPointerDown={e => {
-                        e.stopPropagation();
-                        handlePointerDown(e, segment.id, 'resize');
-                      }}
-                    />
-                  </div>
+                    onResizePointerDown={e => handlePointerDown(e, segment.id, 'resize')}
+                  />
                 </div>
               );
             })}

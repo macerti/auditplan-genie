@@ -1,18 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AuditSegment, parseDecimalInput } from "@/types/audit";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { BilingualText } from "@/components/BilingualLabel";
+import { TimeSelect, DurationInput } from "@/components/forms";
 
 interface SegmentEditDialogProps {
   open: boolean;
@@ -37,8 +29,6 @@ export function SegmentEditDialog({
   const [minuteStr, setMinuteStr] = useState("0");
   const [durationInput, setDurationInput] = useState("2");
 
-  const hourOptions = useMemo(() => Array.from({ length: 24 }).map((_, h) => h), []);
-
   useEffect(() => {
     if (!segment) return;
     const h = Math.floor(segment.startHour);
@@ -48,12 +38,6 @@ export function SegmentEditDialog({
     setMinuteStr(String(snappedM));
     setDurationInput(String(segment.duration));
   }, [segment]);
-
-  const handleDurationIncrement = (delta: number) => {
-    const current = parseDecimalInput(durationInput) ?? 0;
-    const next = Math.max(0.25, current + delta);
-    setDurationInput(String(next));
-  };
 
   const handleSave = () => {
     if (!segment) return;
@@ -86,32 +70,13 @@ export function SegmentEditDialog({
               <Label className="text-xs">
                 <BilingualText en="Start time" fr="Heure de début" />
               </Label>
-              <div className="mt-1 flex gap-2">
-                <Select value={hourStr} onValueChange={setHourStr}>
-                  <SelectTrigger className="border-2 font-mono">
-                    <SelectValue placeholder="08" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hourOptions.map((h) => (
-                      <SelectItem key={h} value={String(h)} className="font-mono">
-                        {String(h).padStart(2, "0")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={minuteStr} onValueChange={setMinuteStr}>
-                  <SelectTrigger className="border-2 font-mono">
-                    <SelectValue placeholder="00" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MINUTES_OPTIONS.map((m) => (
-                      <SelectItem key={m} value={String(m)} className="font-mono">
-                        {String(m).padStart(2, "0")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="mt-1">
+                <TimeSelect
+                  hourValue={hourStr}
+                  minuteValue={minuteStr}
+                  onHourChange={setHourStr}
+                  onMinuteChange={setMinuteStr}
+                />
               </div>
               <p className="text-[11px] text-muted-foreground font-mono mt-1">
                 <BilingualText en="15-minute increments" fr="Incréments de 15 minutes" showFr={false} />
@@ -122,34 +87,12 @@ export function SegmentEditDialog({
               <Label className="text-xs">
                 <BilingualText en="Duration (hours)" fr="Durée (heures)" />
               </Label>
-              <div className="mt-1 flex items-center gap-1">
-                <Input
+              <div className="mt-1">
+                <DurationInput
                   value={durationInput}
-                  onChange={(e) => setDurationInput(e.target.value)}
-                  className="border-2 font-mono"
-                  inputMode="decimal"
-                  placeholder="2"
+                  onChange={setDurationInput}
+                  inputClassName="font-mono"
                 />
-                <div className="flex flex-col">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-5 px-1 border"
-                    onClick={() => handleDurationIncrement(0.25)}
-                  >
-                    <ChevronUp className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-5 px-1 border"
-                    onClick={() => handleDurationIncrement(-0.25)}
-                  >
-                    <ChevronDown className="w-3 h-3" />
-                  </Button>
-                </div>
               </div>
               <p className="text-[11px] text-muted-foreground font-mono mt-1">
                 <BilingualText en="Comma or dot accepted" fr="Virgule ou point acceptés" showFr={false} />

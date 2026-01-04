@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Auditor, AuditorSummary, ComplianceStatus, formatHours, parseDecimalInput } from '@/types/audit';
+import { Auditor, AuditorSummary, formatHours } from '@/types/audit';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, User, ChevronUp, ChevronDown, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, User, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
+import { DurationInput } from '@/components/forms';
+import { getStatusClasses } from '@/lib/statusUtils';
+import { parseDecimalInput } from '@/types/audit';
 
 interface AuditorPanelProps {
   auditors: Auditor[];
@@ -13,17 +16,6 @@ interface AuditorPanelProps {
   onUpdate: (id: string, updates: Partial<Auditor>) => void;
   onRemove: (id: string) => void;
   summaries: AuditorSummary[];
-}
-
-function getStatusClasses(status: ComplianceStatus) {
-  switch (status) {
-    case 'valid':
-      return 'border-status-valid bg-status-valid-bg';
-    case 'warning':
-      return 'border-status-warning bg-status-warning-bg';
-    case 'violation':
-      return 'border-status-violation bg-status-violation-bg';
-  }
 }
 
 export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }: AuditorPanelProps) {
@@ -41,12 +33,6 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
     setName('');
     setMaxMandaysInput('5');
     setShowForm(false);
-  };
-
-  const handleMandaysIncrement = (delta: number) => {
-    const current = parseDecimalInput(maxMandaysInput) || 0;
-    const newVal = Math.max(0.25, current + delta);
-    setMaxMandaysInput(newVal.toString());
   };
 
   const startEditingMandays = (auditor: Auditor) => {
@@ -67,12 +53,6 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
   const cancelEditingMandays = () => {
     setEditingAuditorId(null);
     setEditingMaxMandays('');
-  };
-
-  const handleEditMandaysIncrement = (delta: number) => {
-    const current = parseDecimalInput(editingMaxMandays) || 0;
-    const newVal = Math.max(0.25, current + delta);
-    setEditingMaxMandays(newVal.toString());
   };
 
   return (
@@ -106,35 +86,10 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
             <Label htmlFor="max-mandays">
               <BilingualText en="Max Mandays (0.25 increments)" fr="Jours-homme max (incréments de 0,25)" />
             </Label>
-            <div className="flex items-center gap-1">
-              <Input
-                id="max-mandays"
-                value={maxMandaysInput}
-                onChange={e => setMaxMandaysInput(e.target.value)}
-                className="border-2 w-24"
-                placeholder="e.g. 3,5"
-              />
-              <div className="flex flex-col">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-5 px-1 border"
-                  onClick={() => handleMandaysIncrement(0.25)}
-                >
-                  <ChevronUp className="w-3 h-3" />
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-5 px-1 border"
-                  onClick={() => handleMandaysIncrement(-0.25)}
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </Button>
-              </div>
-            </div>
+            <DurationInput
+              value={maxMandaysInput}
+              onChange={setMaxMandaysInput}
+            />
             <p className="text-xs text-muted-foreground mt-1">
               <BilingualText 
                 en="Use comma or dot as decimal (e.g., 3,5 or 3.5)" 
@@ -188,26 +143,6 @@ export function AuditorPanel({ auditors, onAdd, onUpdate, onRemove, summaries }:
                         inputMode="decimal"
                         autoFocus
                       />
-                      <div className="flex flex-col">
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-4 px-0.5 border"
-                          onClick={() => handleEditMandaysIncrement(0.25)}
-                        >
-                          <ChevronUp className="w-2 h-2" />
-                        </Button>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-4 px-0.5 border"
-                          onClick={() => handleEditMandaysIncrement(-0.25)}
-                        >
-                          <ChevronDown className="w-2 h-2" />
-                        </Button>
-                      </div>
                       <Button
                         type="button"
                         variant="outline"

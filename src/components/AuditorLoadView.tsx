@@ -4,23 +4,28 @@ import {
   Auditor, 
   Process, 
   AuditorSummary, 
-  ComplianceStatus, 
   HOURS_PER_DAY_LIMIT, 
   formatHours,
-  formatTimeLabel,
-  DEFAULT_START_HOUR,
-  DEFAULT_END_HOUR
+  formatTimeLabel
 } from '@/types/audit';
 import { getSegmentComplianceStatus } from '@/lib/compliance';
 import { cn } from '@/lib/utils';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
+import { 
+  TimelineHeader, 
+  TimelineGrid, 
+  DateSwitcher, 
+  SegmentBar 
+} from '@/components/gantt';
+import { getDailyStatusClass } from '@/lib/statusUtils';
+import {
+  TIMELINE_START,
+  TIMELINE_HOURS,
+  HOUR_WIDTH,
+  AUDITOR_ROW_HEIGHT,
+  FROZEN_COL_WIDTH
+} from '@/constants/timeline';
+import { DEFAULT_START_HOUR } from '@/types/audit';
 
 interface AuditorLoadViewProps {
   segments: AuditSegment[];
@@ -30,36 +35,6 @@ interface AuditorLoadViewProps {
   selectedDate: Date | null;
   auditDates: Date[];
   onSelectDate: (date: Date) => void;
-}
-
-// Timeline configuration
-const TIMELINE_START = 6; // 06:00
-const TIMELINE_END = 18; // 18:00
-const TIMELINE_HOURS = TIMELINE_END - TIMELINE_START;
-const HOUR_WIDTH = 80;
-const QUARTER_WIDTH = HOUR_WIDTH / 4;
-const AUDITOR_ROW_HEIGHT = 110; // Taller than other rows per spec 11.2
-const FROZEN_COL_WIDTH = 220;
-
-function getStatusColor(status: ComplianceStatus) {
-  switch (status) {
-    case 'valid':
-      return 'bg-status-valid border-status-valid';
-    case 'warning':
-      return 'bg-status-warning border-status-warning';
-    case 'violation':
-      return 'bg-status-violation border-status-violation';
-  }
-}
-
-function getDailyStatusClass(hours: number): string {
-  if (hours > HOURS_PER_DAY_LIMIT) {
-    return 'bg-status-violation-bg border-status-violation text-status-violation';
-  }
-  if (hours > HOURS_PER_DAY_LIMIT - 1) {
-    return 'bg-status-warning-bg border-status-warning text-status-warning';
-  }
-  return 'border-border/30';
 }
 
 export function AuditorLoadView({
@@ -91,36 +66,11 @@ export function AuditorLoadView({
         <h2 className="text-lg font-bold uppercase tracking-wide">
           <BilingualLabel labelKey="auditorLoadView" />
         </h2>
-
-        {/* Date (display + switch day) */}
-        {auditDates.length > 0 ? (
-          <Select
-            value={dateStr}
-            onValueChange={(val) => {
-              const next = auditDates.find(d => format(d, 'yyyy-MM-dd') === val);
-              if (next) onSelectDate(next);
-            }}
-          >
-            <SelectTrigger className="w-auto border-2 font-mono text-sm">
-              <SelectValue placeholder={format(selectedDate, 'EEEE, dd MMMM yyyy')} />
-            </SelectTrigger>
-            <SelectContent>
-              {auditDates.map((d, idx) => {
-                const dStr = format(d, 'yyyy-MM-dd');
-                return (
-                  <SelectItem key={dStr} value={dStr} className="font-mono">
-                    D{idx + 1}: {format(d, 'dd MMM yyyy')}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        ) : (
-          <span className="font-mono text-sm bg-secondary px-2 py-1 border-2">
-            {format(selectedDate, 'EEEE, dd MMMM yyyy')}
-          </span>
-        )}
-
+        <DateSwitcher
+          selectedDate={selectedDate}
+          auditDates={auditDates}
+          onSelectDate={onSelectDate}
+        />
         <div className="text-xs font-mono text-muted-foreground ml-auto">
           <BilingualText 
             en={`Capacity & availability control — Max ${HOURS_PER_DAY_LIMIT}h/day`}
@@ -133,11 +83,9 @@ export function AuditorLoadView({
       <div className="flex">
         {/* Frozen column */}
         <div className="flex-shrink-0 border-r-2 border-border" style={{ width: FROZEN_COL_WIDTH }}>
-          {/* Header */}
           <div className="h-12 border-b-2 border-border bg-secondary p-2 font-bold text-sm flex items-center">
             <BilingualLabel labelKey="auditor" />
           </div>
-          {/* Auditor rows - TALLER per spec 11.2 */}
           {auditors.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground font-mono text-sm">
               <BilingualLabel labelKey="noAuditors" />
@@ -205,50 +153,11 @@ export function AuditorLoadView({
         {/* Scrollable timeline */}
         <div className="flex-1 overflow-x-auto">
           <div style={{ minWidth: chartWidth }}>
-            {/* Timeline header with ruler */}
-            <div className="h-12 border-b-2 border-border bg-secondary flex relative">
-              {Array.from({ length: TIMELINE_HOURS }).map((_, hourIndex) => {
-                const hour = TIMELINE_START + hourIndex;
-                const isLunchHour = hour === 12;
-                const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
-                
-                return (
-                  <div
-                    key={hourIndex}
-                    className={cn(
-                      "flex-shrink-0 border-r border-border/30 relative",
-                      isLunchHour && "bg-muted/50",
-                      isOutsideWork && "bg-muted/30"
-                    )}
-                    style={{ width: HOUR_WIDTH }}
-                  >
-                    <div className={cn(
-                      "text-xs font-mono font-bold px-1 py-1",
-                      isOutsideWork && "text-muted-foreground"
-                    )}>
-                      {formatTimeLabel(hour)}
-                    </div>
-                    {/* Quarter hour marks */}
-                    <div className="absolute bottom-0 left-0 right-0 flex h-3">
-                      {[0, 1, 2, 3].map((q) => (
-                        <div 
-                          key={q} 
-                          className={cn(
-                            "flex-1 border-r",
-                            q === 0 ? "border-border" : "border-border/20"
-                          )}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <TimelineHeader />
 
-            {/* Auditor rows - TALLER */}
+            {/* Auditor rows */}
             {auditors.map(auditor => {
               const auditorDaySegments = daySegments.filter(s => s.auditorIds.includes(auditor.id));
-              const summary = summaries.find(s => s.auditorId === auditor.id);
 
               return (
                 <div
@@ -256,36 +165,7 @@ export function AuditorLoadView({
                   className="border-b border-border/50 relative"
                   style={{ height: AUDITOR_ROW_HEIGHT }}
                 >
-                  {/* Background grid */}
-                  <div className="absolute inset-0 flex">
-                    {Array.from({ length: TIMELINE_HOURS }).map((_, hourIndex) => {
-                      const hour = TIMELINE_START + hourIndex;
-                      const isLunchHour = hour === 12;
-                      const isOutsideWork = hour < DEFAULT_START_HOUR || hour >= DEFAULT_END_HOUR;
-                      
-                      return (
-                        <div
-                          key={hourIndex}
-                          className={cn(
-                            "flex-shrink-0 border-r relative",
-                            hourIndex === 0 ? "border-border" : "border-border/20",
-                            isLunchHour && "bg-muted/30",
-                            isOutsideWork && "bg-muted/20"
-                          )}
-                          style={{ width: HOUR_WIDTH }}
-                        >
-                          {/* Quarter hour lines */}
-                          {[1, 2, 3].map((q) => (
-                            <div
-                              key={q}
-                              className="absolute top-0 bottom-0 border-l border-border/10"
-                              style={{ left: q * QUARTER_WIDTH }}
-                            />
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <TimelineGrid />
 
                   {/* 7h limit indicator */}
                   <div
@@ -298,25 +178,16 @@ export function AuditorLoadView({
                   {auditorDaySegments.map(segment => {
                     const process = processes.find(p => p.id === segment.processId);
                     const status = getSegmentComplianceStatus(segment, auditors, summaries);
-                    const segmentLeft = (segment.startHour - TIMELINE_START) * HOUR_WIDTH;
-                    const segmentWidth = segment.duration * HOUR_WIDTH;
 
                     return (
-                      <div
+                      <SegmentBar
                         key={segment.id}
-                        className={cn(
-                          "absolute top-2 bottom-2 border-2 flex items-center justify-center text-xs font-mono select-none px-1 z-10",
-                          getStatusColor(status),
-                          "text-primary-foreground"
-                        )}
-                        style={{
-                          left: Math.max(0, segmentLeft),
-                          width: Math.max(segmentWidth - 4, 20)
-                        }}
-                        title={`${process?.name || 'Unknown'}: ${formatTimeLabel(segment.startHour)}-${formatTimeLabel(segment.startHour + segment.duration)}`}
-                      >
-                        <span className="truncate text-[10px]">{process?.name?.slice(0, 12) || '?'}</span>
-                      </div>
+                        startHour={segment.startHour}
+                        duration={segment.duration}
+                        status={status}
+                        processName={process?.name}
+                        showDetails={false}
+                      />
                     );
                   })}
                 </div>

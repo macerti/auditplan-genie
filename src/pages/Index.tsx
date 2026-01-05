@@ -28,7 +28,12 @@ const Index = () => {
     removeAuditDate,
     selectedDate,
     setSelectedDate,
-    getAuditorSummaries
+    getAuditorSummaries,
+    totalRequiredMandays,
+    setTotalRequiredMandays,
+    auditorMandaysSum,
+    effectiveTotalMandays,
+    getExpectedHoursForDay
   } = useAuditStore();
 
   const summaries = getAuditorSummaries();
@@ -55,6 +60,10 @@ const Index = () => {
           onAddDate={addAuditDate}
           onRemoveDate={removeAuditDate}
           onSelectDate={setSelectedDate}
+          totalRequiredMandays={totalRequiredMandays}
+          onSetTotalRequiredMandays={setTotalRequiredMandays}
+          auditorMandaysSum={auditorMandaysSum}
+          effectiveTotalMandays={effectiveTotalMandays}
         />
 
         <Separator className="border-2" />
@@ -126,6 +135,8 @@ const Index = () => {
           segments={segments}
           processes={processes}
           auditDates={auditDates}
+          getExpectedHoursForDay={getExpectedHoursForDay}
+          effectiveTotalMandays={effectiveTotalMandays}
         />
       </main>
 

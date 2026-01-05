@@ -81,7 +81,13 @@ export const labels = {
   total: { en: 'Total', fr: 'Total' },
   
   // Process/Auditors column
-  processAuditors: { en: 'Process / Auditors', fr: 'Processus / Auditeurs' }
+  processAuditors: { en: 'Process / Auditors', fr: 'Processus / Auditeurs' },
+  
+  // Total mandays
+  totalRequiredMandays: { en: 'Total Required Mandays', fr: 'Jours-Homme Requis' },
+  autoCalculated: { en: 'Auto (from auditors)', fr: 'Auto (des auditeurs)' },
+  partialDay: { en: 'Partial Day', fr: 'Jour Partiel' },
+  expectedPresence: { en: 'Expected', fr: 'Attendu' }
 } as const;
 
 export type LabelKey = keyof typeof labels;

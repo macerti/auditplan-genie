@@ -1,4 +1,4 @@
-import { AuditSegment, ComplianceStatus } from '@/types/audit';
+import { AuditSegment, Auditor, ComplianceStatus } from '@/types/audit';
 
 export interface DailyAuditMetrics {
   date: string;
@@ -8,6 +8,16 @@ export interface DailyAuditMetrics {
    * Parallel segments are NOT double-counted.
    */
   presence: number;
+
+  /**
+   * Required presence for this day (7h normally, partial on last day based on auditor mandays)
+   */
+  requiredPresence: number;
+
+  /**
+   * Whether this is a partial day (last day with fractional mandays)
+   */
+  isPartialDay: boolean;
 
   /**
    * Elapsed window from first segment start to last segment end.
@@ -31,9 +41,9 @@ export interface DailyAuditMetrics {
 
   /**
    * Compliance for daily audit presence (auditee perspective).
-   * - presence === 7h => OK
-   * - presence > 7h => violation
-   * - presence < 7h => violation (per user requirement)
+   * - presence === requiredPresence => OK
+   * - presence > requiredPresence => violation
+   * - presence < requiredPresence => violation
    */
   presenceStatus: ComplianceStatus;
 
@@ -43,8 +53,27 @@ export interface DailyAuditMetrics {
   idleStatus: ComplianceStatus;
 }
 
-const REQUIRED_PRESENCE_HOURS = 7;
+const FULL_DAY_PRESENCE_HOURS = 7;
 const LUNCH_DEDUCTION_HOURS = 1;
+
+/**
+ * Get the required presence for the last day based on longest auditor's max manday decimal
+ */
+function getLastDayRequiredPresence(auditors: Auditor[]): number {
+  if (auditors.length === 0) return FULL_DAY_PRESENCE_HOURS;
+  
+  // Find the longest max manday
+  const maxMandays = Math.max(...auditors.map(a => a.maxMandays));
+  
+  // Get the decimal part
+  const decimal = maxMandays % 1;
+  
+  // If no decimal, it's a full day
+  if (decimal === 0) return FULL_DAY_PRESENCE_HOURS;
+  
+  // Convert decimal to hours (0.25 = 1.75h, 0.5 = 3.5h, 0.75 = 5.25h)
+  return decimal * FULL_DAY_PRESENCE_HOURS;
+}
 
 function mergeIntervals(intervals: Array<{ start: number; end: number }>) {
   if (intervals.length === 0) return [];
@@ -116,15 +145,30 @@ export function calculateIdleAuditTime(totalGaps: number): {
 }
 
 /**
- * Get all daily metrics for a specific date
+ * Get daily metrics for a specific date
+ * @param isLastDay - whether this is the last audit day (allows partial presence)
+ * @param auditors - list of auditors (used to determine partial day requirement)
  */
-export function getDailyMetrics(segments: AuditSegment[], date: string): DailyAuditMetrics {
+export function getDailyMetrics(
+  segments: AuditSegment[], 
+  date: string,
+  isLastDay: boolean = false,
+  auditors: Auditor[] = []
+): DailyAuditMetrics {
   const { presence, windowSpan, start, end, totalGaps } = calculateDailyAuditPresence(segments, date);
   const { idleTime, lunchDeducted } = calculateIdleAuditTime(totalGaps);
 
+  // Determine required presence
+  const isPartialDay = isLastDay && auditors.length > 0 && 
+    Math.max(...auditors.map(a => a.maxMandays)) % 1 !== 0;
+  
+  const requiredPresence = isPartialDay 
+    ? getLastDayRequiredPresence(auditors) 
+    : FULL_DAY_PRESENCE_HOURS;
+
   let presenceStatus: ComplianceStatus = 'valid';
   if (presence > 0) {
-    presenceStatus = presence === REQUIRED_PRESENCE_HOURS ? 'valid' : 'violation';
+    presenceStatus = presence === requiredPresence ? 'valid' : 'violation';
   }
 
   const idleStatus: ComplianceStatus = idleTime > 0 ? 'warning' : 'valid';
@@ -132,6 +176,8 @@ export function getDailyMetrics(segments: AuditSegment[], date: string): DailyAu
   return {
     date,
     presence,
+    requiredPresence,
+    isPartialDay,
     windowSpan,
     windowStart: start,
     windowEnd: end,
@@ -146,12 +192,15 @@ export function getDailyMetrics(segments: AuditSegment[], date: string): DailyAu
 /**
  * Get metrics for all audit dates
  */
-export function getAllDailyMetrics(segments: AuditSegment[], dates: Date[]): DailyAuditMetrics[] {
-  // Note: Use getDailyMetrics directly with formatted date strings
-  // to avoid circular imports
-  return dates.map(date => {
+export function getAllDailyMetrics(
+  segments: AuditSegment[], 
+  dates: Date[],
+  auditors: Auditor[] = []
+): DailyAuditMetrics[] {
+  return dates.map((date, index) => {
     const dateStr = date.toISOString().split('T')[0];
-    return getDailyMetrics(segments, dateStr);
+    const isLastDay = index === dates.length - 1;
+    return getDailyMetrics(segments, dateStr, isLastDay, auditors);
   });
 }
 

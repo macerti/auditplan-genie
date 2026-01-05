@@ -38,10 +38,11 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
     0
   );
 
-  // Calculate daily metrics for all dates
-  const dailyMetrics: DailyAuditMetrics[] = auditDates.map(date => {
+  // Calculate daily metrics for all dates (with partial day support for last day)
+  const dailyMetrics: DailyAuditMetrics[] = auditDates.map((date, index) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return getDailyMetrics(segments, dateStr);
+    const isLastDay = index === auditDates.length - 1;
+    return getDailyMetrics(segments, dateStr, isLastDay, auditors);
   });
 
   // Count presence violations
@@ -95,8 +96,8 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
 
       <p className="text-xs text-muted-foreground font-mono mb-4">
         <BilingualText 
-          en="Daily audit presence must be 7h • Idle gaps allowed: 1h lunch" 
-          fr="La présence d'audit doit être de 7h • Pauses tolérées: 1h déjeuner"
+          en="Daily audit presence must be 7h (partial allowed on last day based on mandays) • Idle gaps allowed: 1h lunch" 
+          fr="La présence d'audit doit être de 7h (partiel autorisé le dernier jour selon les J-H) • Pauses tolérées: 1h déjeuner"
         />
       </p>
 
@@ -132,7 +133,8 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
                           metrics.presenceStatus === 'valid' && "text-status-valid"
                         )}
                       >
-                        = {formatHours(metrics.presence)}
+                        = {formatHours(metrics.presence)}/{formatHours(metrics.requiredPresence)}
+                        {metrics.isPartialDay && ' (partial)'}
                       </span>
                       {metrics.presenceStatus === 'valid' && <CheckCircle className="w-3 h-3 text-status-valid" />}
                       {metrics.presenceStatus === 'violation' && <XCircle className="w-3 h-3 text-status-violation" />}

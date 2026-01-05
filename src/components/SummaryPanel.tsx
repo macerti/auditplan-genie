@@ -15,6 +15,8 @@ interface SummaryPanelProps {
   segments: AuditSegment[];
   processes: Process[];
   auditDates: Date[];
+  getExpectedHoursForDay: (dayIndex: number, totalDays: number) => number;
+  effectiveTotalMandays: number;
 }
 
 function getStatusIcon(status: ComplianceStatus) {
@@ -28,7 +30,15 @@ function getStatusIcon(status: ComplianceStatus) {
   }
 }
 
-export function SummaryPanel({ auditors, summaries, segments, processes, auditDates }: SummaryPanelProps) {
+export function SummaryPanel({ 
+  auditors, 
+  summaries, 
+  segments, 
+  processes, 
+  auditDates,
+  getExpectedHoursForDay,
+  effectiveTotalMandays
+}: SummaryPanelProps) {
   const totalViolations = summaries.reduce(
     (acc, s) => acc + s.issues.filter(i => i.severity === 'violation').length,
     0
@@ -38,10 +48,13 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
     0
   );
 
-  // Calculate daily metrics for all dates
-  const dailyMetrics: DailyAuditMetrics[] = auditDates.map(date => {
+  const totalDays = auditDates.length;
+
+  // Calculate daily metrics for all dates with expected hours for each day
+  const dailyMetrics: DailyAuditMetrics[] = auditDates.map((date, idx) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return getDailyMetrics(segments, dateStr);
+    const expectedHours = getExpectedHoursForDay(idx, totalDays);
+    return getDailyMetrics(segments, dateStr, expectedHours);
   });
 
   // Count presence violations
@@ -95,8 +108,8 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
 
       <p className="text-xs text-muted-foreground font-mono mb-4">
         <BilingualText 
-          en="Daily audit presence must be 7h • Idle gaps allowed: 1h lunch" 
-          fr="La présence d'audit doit être de 7h • Pauses tolérées: 1h déjeuner"
+          en={`Daily audit presence must match expected hours (7h or partial on last day) • Total: ${effectiveTotalMandays.toFixed(2)} mandays`}
+          fr={`Présence quotidienne selon heures attendues (7h ou partiel dernier jour) • Total: ${effectiveTotalMandays.toFixed(2)} JH`}
         />
       </p>
 
@@ -112,6 +125,9 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
               const metrics = dailyMetrics[idx];
               if (metrics.presence === 0) return null;
 
+              const expectedHours = getExpectedHoursForDay(idx, totalDays);
+              const isPartialDay = expectedHours < 7 && expectedHours > 0;
+
               return (
                 <div
                   key={metrics.date}
@@ -122,7 +138,14 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold">D{idx + 1}: {format(date, 'dd MMM')}</span>
+                    <span className="font-bold">
+                      D{idx + 1}: {format(date, 'dd MMM')}
+                      {isPartialDay && (
+                        <span className="ml-1 text-[10px] text-muted-foreground font-normal">
+                          (partial)
+                        </span>
+                      )}
+                    </span>
                     <div className="flex items-center gap-2">
                       <span>{formatSpan(metrics.windowStart, metrics.windowEnd)}</span>
                       <span
@@ -133,6 +156,9 @@ export function SummaryPanel({ auditors, summaries, segments, processes, auditDa
                         )}
                       >
                         = {formatHours(metrics.presence)}
+                        {isPartialDay && (
+                          <span className="text-muted-foreground font-normal"> / {formatHours(expectedHours)}</span>
+                        )}
                       </span>
                       {metrics.presenceStatus === 'valid' && <CheckCircle className="w-3 h-3 text-status-valid" />}
                       {metrics.presenceStatus === 'violation' && <XCircle className="w-3 h-3 text-status-violation" />}

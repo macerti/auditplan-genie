@@ -117,14 +117,29 @@ export function calculateIdleAuditTime(totalGaps: number): {
 
 /**
  * Get all daily metrics for a specific date
+ * @param expectedHours - For partial days (last day of audit), the expected hours instead of 7h
  */
-export function getDailyMetrics(segments: AuditSegment[], date: string): DailyAuditMetrics {
+export function getDailyMetrics(
+  segments: AuditSegment[], 
+  date: string,
+  expectedHours: number = REQUIRED_PRESENCE_HOURS
+): DailyAuditMetrics {
   const { presence, windowSpan, start, end, totalGaps } = calculateDailyAuditPresence(segments, date);
   const { idleTime, lunchDeducted } = calculateIdleAuditTime(totalGaps);
 
+  const requiredHours = expectedHours > 0 ? expectedHours : REQUIRED_PRESENCE_HOURS;
+  
   let presenceStatus: ComplianceStatus = 'valid';
   if (presence > 0) {
-    presenceStatus = presence === REQUIRED_PRESENCE_HOURS ? 'valid' : 'violation';
+    // Tolerance: within 0.25h of expected is OK
+    const diff = Math.abs(presence - requiredHours);
+    if (diff <= 0.25) {
+      presenceStatus = 'valid';
+    } else if (presence > requiredHours) {
+      presenceStatus = 'violation'; // exceeded
+    } else {
+      presenceStatus = 'violation'; // under
+    }
   }
 
   const idleStatus: ComplianceStatus = idleTime > 0 ? 'warning' : 'valid';

@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
-import { Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement, DEFAULT_START_HOUR, HOURS_PER_MANDAY } from '@/types/audit';
+import { useState, useCallback } from 'react';
+import { Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement, DEFAULT_START_HOUR } from '@/types/audit';
 import { calculateAuditorSummary } from '@/lib/compliance';
 import { format } from 'date-fns';
 
@@ -18,39 +18,6 @@ export function useAuditStore() {
   const [segments, setSegments] = useState<AuditSegment[]>([]);
   const [auditDates, setAuditDates] = useState<Date[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  
-  // Total required mandays - null means auto-calculated from auditor sum
-  const [totalRequiredMandays, setTotalRequiredMandays] = useState<number | null>(null);
-
-  // Computed: sum of all auditor max mandays
-  const auditorMandaysSum = useMemo(() => {
-    return auditors.reduce((sum, a) => sum + a.maxMandays, 0);
-  }, [auditors]);
-
-  // Effective total mandays (user-set or auto from auditors)
-  const effectiveTotalMandays = useMemo(() => {
-    return totalRequiredMandays ?? auditorMandaysSum;
-  }, [totalRequiredMandays, auditorMandaysSum]);
-
-  // Calculate expected hours for the last day based on total mandays
-  const getExpectedHoursForDay = useCallback((dayIndex: number, totalDays: number): number => {
-    if (totalDays === 0 || effectiveTotalMandays <= 0) return HOURS_PER_MANDAY;
-    
-    const fullDays = Math.floor(effectiveTotalMandays);
-    const partialDay = effectiveTotalMandays - fullDays;
-    
-    // If this is the last day and there's a partial
-    if (dayIndex === totalDays - 1 && partialDay > 0) {
-      return roundToIncrement(partialDay * HOURS_PER_MANDAY);
-    }
-    
-    // For days beyond what's needed, expected is 0
-    if (dayIndex >= effectiveTotalMandays) {
-      return 0;
-    }
-    
-    return HOURS_PER_MANDAY;
-  }, [effectiveTotalMandays]);
 
   const addAuditDate = useCallback((date: Date) => {
     setAuditDates(prev => {
@@ -161,12 +128,6 @@ export function useAuditStore() {
     removeAuditDate,
     selectedDate,
     setSelectedDate,
-    getAuditorSummaries,
-    // Total mandays
-    totalRequiredMandays,
-    setTotalRequiredMandays,
-    auditorMandaysSum,
-    effectiveTotalMandays,
-    getExpectedHoursForDay
+    getAuditorSummaries
   };
 }

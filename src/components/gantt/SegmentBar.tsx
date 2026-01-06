@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import { ComplianceStatus, formatTimeLabel, formatHours } from '@/types/audit';
 import { HOUR_WIDTH, TIMELINE_START, QUARTER_WIDTH } from '@/constants/timeline';
+import { getStatusColor } from '@/lib/statusUtils';
 
 interface SegmentBarProps {
   startHour: number;
@@ -12,17 +13,6 @@ interface SegmentBarProps {
   onPointerDown?: (e: React.PointerEvent) => void;
   onResizePointerDown?: (e: React.PointerEvent) => void;
   className?: string;
-}
-
-function getStatusColor(status: ComplianceStatus) {
-  switch (status) {
-    case 'valid':
-      return 'bg-status-valid border-status-valid';
-    case 'warning':
-      return 'bg-status-warning border-status-warning';
-    case 'violation':
-      return 'bg-status-violation border-status-violation';
-  }
 }
 
 export function SegmentBar({

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement, DEFAULT_START_HOUR } from '@/types/audit';
+import { Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement } from '@/types/audit';
 import { calculateAuditorSummary } from '@/lib/compliance';
 import { format } from 'date-fns';
 

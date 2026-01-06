@@ -215,4 +215,3 @@ export function formatSpan(start: number, end: number): string {
   };
   return `${formatTime(start)} → ${formatTime(end)}`;
 }
-

@@ -1,11 +1,5 @@
 import { format } from 'date-fns';
-import { AuditSegment, Auditor, Process, formatHours } from '@/types/audit';
-
-function formatExportTime(hour: number): string {
-  const h = Math.floor(hour);
-  const m = Math.round((hour - h) * 60);
-  return `${h.toString().padStart(2, '0')}H${m.toString().padStart(2, '0')}`;
-}
+import { AuditSegment, Auditor, Process, formatHours, formatTimeLabel } from '@/types/audit';
 
 export function exportAuditPlan(
   segments: AuditSegment[],
@@ -26,7 +20,7 @@ export function exportAuditPlan(
     
     return {
       date: format(date, 'dd MMM yyyy'),
-      time: `${formatExportTime(segment.startHour)}–${formatExportTime(segment.startHour + segment.duration)} (${formatHours(segment.duration)})`,
+      time: `${formatTimeLabel(segment.startHour)}–${formatTimeLabel(segment.startHour + segment.duration)} (${formatHours(segment.duration)})`,
       auditors: segmentAuditors.map(a => a.name).join(', '),
       process: process?.name || 'Unknown',
       contact: ''

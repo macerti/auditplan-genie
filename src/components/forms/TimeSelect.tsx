@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import {
   Select,
   SelectContent,
@@ -12,17 +11,22 @@ interface TimeSelectProps {
   minuteValue: string;
   onHourChange: (value: string) => void;
   onMinuteChange: (value: string) => void;
+  /** Restrict hours to 8-18 (default for segment creation) */
+  restrictedHours?: boolean;
 }
 
 const MINUTE_OPTIONS = [0, 15, 30, 45] as const;
+const FULL_HOURS = Array.from({ length: 24 }, (_, h) => h);
+const RESTRICTED_HOURS = Array.from({ length: 11 }, (_, i) => i + 8); // 8-18
 
 export function TimeSelect({
   hourValue,
   minuteValue,
   onHourChange,
   onMinuteChange,
+  restrictedHours = true,
 }: TimeSelectProps) {
-  const hourOptions = useMemo(() => Array.from({ length: 24 }).map((_, h) => h), []);
+  const hourOptions = restrictedHours ? RESTRICTED_HOURS : FULL_HOURS;
 
   return (
     <div className="flex gap-2">

@@ -76,6 +76,7 @@ export function SegmentEditDialog({
                   minuteValue={minuteStr}
                   onHourChange={setHourStr}
                   onMinuteChange={setMinuteStr}
+                  restrictedHours={false}
                 />
               </div>
               <p className="text-[11px] text-muted-foreground font-mono mt-1">

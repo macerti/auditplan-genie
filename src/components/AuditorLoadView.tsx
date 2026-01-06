@@ -6,7 +6,7 @@ import {
   AuditorSummary, 
   HOURS_PER_DAY_LIMIT, 
   formatHours,
-  formatTimeLabel
+  DEFAULT_START_HOUR
 } from '@/types/audit';
 import { getSegmentComplianceStatus } from '@/lib/compliance';
 import { cn } from '@/lib/utils';
@@ -25,7 +25,6 @@ import {
   AUDITOR_ROW_HEIGHT,
   FROZEN_COL_WIDTH
 } from '@/constants/timeline';
-import { DEFAULT_START_HOUR } from '@/types/audit';
 
 interface AuditorLoadViewProps {
   segments: AuditSegment[];

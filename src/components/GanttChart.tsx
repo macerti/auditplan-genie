@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import {
   AuditSegment,
@@ -6,9 +6,7 @@ import {
   Process,
   AuditorSummary,
   TIME_INCREMENT,
-  formatHours,
   roundToIncrement,
-  formatTimeLabel,
   DEFAULT_START_HOUR,
   parseDecimalInput
 } from '@/types/audit';

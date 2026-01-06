@@ -40,17 +40,27 @@ const defaultProcesses: Process[] = [
 ];
 
 export function useAuditStore() {
-  const stored = loadFromStorage();
-  
-  const [auditors, setAuditors] = useState<Auditor[]>(stored?.auditors ?? []);
-  const [processes, setProcesses] = useState<Process[]>(stored?.processes ?? defaultProcesses);
-  const [segments, setSegments] = useState<AuditSegment[]>(stored?.segments ?? []);
-  const [auditDates, setAuditDates] = useState<Date[]>(
-    () => stored?.auditDates?.map(d => new Date(d)) ?? []
-  );
-  const [selectedDate, setSelectedDate] = useState<Date | null>(
-    () => stored?.selectedDate ? new Date(stored.selectedDate) : null
-  );
+  // Lazy initialization - only load from storage once on mount
+  const [auditors, setAuditors] = useState<Auditor[]>(() => {
+    const stored = loadFromStorage();
+    return stored?.auditors ?? [];
+  });
+  const [processes, setProcesses] = useState<Process[]>(() => {
+    const stored = loadFromStorage();
+    return stored?.processes ?? defaultProcesses;
+  });
+  const [segments, setSegments] = useState<AuditSegment[]>(() => {
+    const stored = loadFromStorage();
+    return stored?.segments ?? [];
+  });
+  const [auditDates, setAuditDates] = useState<Date[]>(() => {
+    const stored = loadFromStorage();
+    return stored?.auditDates?.map(d => new Date(d)) ?? [];
+  });
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
+    const stored = loadFromStorage();
+    return stored?.selectedDate ? new Date(stored.selectedDate) : null;
+  });
 
   const addAuditDate = useCallback((date: Date) => {
     setAuditDates(prev => {
@@ -67,17 +77,26 @@ export function useAuditStore() {
 
   const removeAuditDate = useCallback((date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    setAuditDates(prev => prev.filter(d => format(d, 'yyyy-MM-dd') !== dateStr));
+    
+    setAuditDates(prev => {
+      const filtered = prev.filter(d => format(d, 'yyyy-MM-dd') !== dateStr);
+      
+      // Update selected date if needed (using setTimeout to avoid nested setState)
+      setTimeout(() => {
+        setSelectedDate(current => {
+          if (current && format(current, 'yyyy-MM-dd') === dateStr) {
+            return filtered.length > 0 ? filtered[0] : null;
+          }
+          return current;
+        });
+      }, 0);
+      
+      return filtered;
+    });
+    
     // Remove segments on this date
     setSegments(prev => prev.filter(s => s.date !== dateStr));
-    // Update selected date if removed
-    if (selectedDate && format(selectedDate, 'yyyy-MM-dd') === dateStr) {
-      setSelectedDate(prev => {
-        const remaining = auditDates.filter(d => format(d, 'yyyy-MM-dd') !== dateStr);
-        return remaining.length > 0 ? remaining[0] : null;
-      });
-    }
-  }, [selectedDate, auditDates]);
+  }, []);
 
   const addAuditor = useCallback((auditor: Omit<Auditor, 'id'>) => {
     setAuditors(prev => [...prev, { ...auditor, id: crypto.randomUUID() }]);

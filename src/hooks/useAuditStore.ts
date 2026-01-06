@@ -1,23 +1,56 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Auditor, Process, AuditSegment, AuditorSummary, TIME_INCREMENT, roundToIncrement } from '@/types/audit';
 import { calculateAuditorSummary } from '@/lib/compliance';
 import { format } from 'date-fns';
 
-export function useAuditStore() {
-  // Default realistic French process names
-  const defaultProcesses: Process[] = [
-    { id: crypto.randomUUID(), name: 'Réunion d\'ouverture' },
-    { id: crypto.randomUUID(), name: 'Management DG' },
-    { id: crypto.randomUUID(), name: 'Ressources Humaines' },
-    { id: crypto.randomUUID(), name: 'Achats' },
-    { id: crypto.randomUUID(), name: 'Amélioration' },
-  ];
+const STORAGE_KEY = 'audit-calculator-data';
 
-  const [auditors, setAuditors] = useState<Auditor[]>([]);
-  const [processes, setProcesses] = useState<Process[]>(defaultProcesses);
-  const [segments, setSegments] = useState<AuditSegment[]>([]);
-  const [auditDates, setAuditDates] = useState<Date[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+interface StoredState {
+  auditors: Auditor[];
+  processes: Process[];
+  segments: AuditSegment[];
+  auditDates: string[];
+  selectedDate: string | null;
+}
+
+function loadFromStorage(): Partial<StoredState> | null {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(state: StoredState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage full or unavailable
+  }
+}
+
+// Default realistic French process names
+const defaultProcesses: Process[] = [
+  { id: 'default-1', name: 'Réunion d\'ouverture' },
+  { id: 'default-2', name: 'Management DG' },
+  { id: 'default-3', name: 'Ressources Humaines' },
+  { id: 'default-4', name: 'Achats' },
+  { id: 'default-5', name: 'Amélioration' },
+];
+
+export function useAuditStore() {
+  const stored = loadFromStorage();
+  
+  const [auditors, setAuditors] = useState<Auditor[]>(stored?.auditors ?? []);
+  const [processes, setProcesses] = useState<Process[]>(stored?.processes ?? defaultProcesses);
+  const [segments, setSegments] = useState<AuditSegment[]>(stored?.segments ?? []);
+  const [auditDates, setAuditDates] = useState<Date[]>(
+    () => stored?.auditDates?.map(d => new Date(d)) ?? []
+  );
+  const [selectedDate, setSelectedDate] = useState<Date | null>(
+    () => stored?.selectedDate ? new Date(stored.selectedDate) : null
+  );
 
   const addAuditDate = useCallback((date: Date) => {
     setAuditDates(prev => {
@@ -109,6 +142,17 @@ export function useAuditStore() {
   const getAuditorSummaries = useCallback((): AuditorSummary[] => {
     return auditors.map(auditor => calculateAuditorSummary(auditor, segments));
   }, [auditors, segments]);
+
+  // Persist to localStorage on state changes
+  useEffect(() => {
+    saveToStorage({
+      auditors,
+      processes,
+      segments,
+      auditDates: auditDates.map(d => d.toISOString()),
+      selectedDate: selectedDate?.toISOString() ?? null,
+    });
+  }, [auditors, processes, segments, auditDates, selectedDate]);
 
   return {
     auditors,

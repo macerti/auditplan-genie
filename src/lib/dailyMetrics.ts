@@ -1,4 +1,4 @@
-import { AuditSegment, Auditor, ComplianceStatus } from '@/types/audit';
+import { AuditSegment, Auditor, ComplianceStatus, formatTimeLabel } from '@/types/audit';
 
 export interface DailyAuditMetrics {
   date: string;
@@ -205,13 +205,8 @@ export function getAllDailyMetrics(
 }
 
 /**
- * Format window for display
+ * Format window for display using shared formatTimeLabel
  */
 export function formatSpan(start: number, end: number): string {
-  const formatTime = (hour: number): string => {
-    const h = Math.floor(hour);
-    const m = Math.round((hour - h) * 60);
-    return `${h.toString().padStart(2, '0')}H${m.toString().padStart(2, '0')}`;
-  };
-  return `${formatTime(start)} → ${formatTime(end)}`;
+  return `${formatTimeLabel(start)} → ${formatTimeLabel(end)}`;
 }

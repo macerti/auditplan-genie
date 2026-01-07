@@ -1,10 +1,20 @@
-import { format } from 'date-fns';
+/**
+ * DateSelector Component
+ * 
+ * Allows users to select and manage audit dates.
+ * Features:
+ * - Calendar picker for adding new dates
+ * - Visual indication of selected date
+ * - Click to select, X to remove
+ */
+
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BilingualLabel, BilingualText } from '@/components/BilingualLabel';
+import { toDateStr, formatDisplayDate } from '@/lib/dateUtils';
 
 interface DateSelectorProps {
   auditDates: Date[];
@@ -28,7 +38,7 @@ export function DateSelector({
   };
 
   const disabledDates = (date: Date) => {
-    return auditDates.some(d => format(d, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd'));
+    return auditDates.some(d => toDateStr(d) === toDateStr(date));
   };
 
   return (
@@ -63,8 +73,8 @@ export function DateSelector({
             </p>
           )}
           {auditDates.map((date, idx) => {
-            const dateStr = format(date, 'yyyy-MM-dd');
-            const isSelected = selectedDate && format(selectedDate, 'yyyy-MM-dd') === dateStr;
+            const dateStr = toDateStr(date);
+            const isSelected = selectedDate && toDateStr(selectedDate) === dateStr;
             return (
               <div
                 key={dateStr}
@@ -77,7 +87,7 @@ export function DateSelector({
                 onClick={() => onSelectDate(date)}
               >
                 <span className="font-mono text-sm">
-                  D{idx + 1}: {format(date, 'dd MMM yyyy')}
+                  D{idx + 1}: {formatDisplayDate(date)}
                 </span>
                 <button
                   onClick={(e) => {

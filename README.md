@@ -1,73 +1,132 @@
-# Welcome to your Lovable project
+# AuditPlan Genie
 
-## Project info
+ISO Audit Planning – Visual Gantt Application
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Build a single-page web application (HTML / CSS / JavaScript only, no backend required initially) whose sole purpose is to plan and validate ISO audit activities using a time-based visual Gantt view.
 
-## How can I edit this code?
+This is not a generic project-management tool.
+The application is intended for audit governance and compliance control, where qualification rules and manday constraints drive the UI behavior.
 
-There are several ways of editing your application.
+Context and Goal
 
-**Use Lovable**
+Standard Gantt tools are insufficient because they treat a task as a single block with one duration, whereas audit planning requires modeling:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+• Process audit duration per auditor
+• Qualification constraints (standards + EAC sector codes)
+• Daily working time limits
+• Total mandays per auditor defined by a mission order
 
-Changes made via Lovable will be committed automatically to this repo.
+The goal of the application is to visually verify compliance before finalizing an audit plan.
 
-**Use your preferred IDE**
+Core Entities (Conceptual Model)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+The app should be designed around these entities:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Standards
+– ISO 9001, ISO 14001, ISO 45001 (extensible)
 
-Follow these steps:
+Auditors
+– Name
+– EAC sector codes
+– Qualified ISO standards
+– Maximum mandays for the mission
+– Automatically calculated total hours and mandays used
+
+Processes
+– Process name
+– ISO standards audited in that process
+
+Audit Assignments
+– Link between process × auditor × time segment
+– A single process may be split across:
+• Multiple days
+• Multiple auditors
+
+Functional Requirements
+Standards & Setup
+
+• User selects which ISO standards are in scope for the audit.
+• Only selected standards are available for processes and assignments.
+
+Auditor Management
+
+• User creates an audit team and defines:
+– EAC sector codes
+– Qualified ISO standards
+– Maximum mandays
+
+Process Definition
+
+• User defines audit processes and selects:
+– Which ISO standards are audited per process
+
+Assignment Rules (Hard Constraints)
+
+• An auditor may only be assigned to a process if:
+– They are qualified for all required ISO standards
+– They are qualified for the relevant EAC sector code
+• An auditor may not exceed:
+– 7 working hours per day
+– Total mandays defined in the mission order
+
+Visualization & Interaction
+
+• Hour-level Gantt chart (not day-level)
+• Horizontal axis: time (hours)
+• Vertical axis: audit assignments
+• User can:
+– Drag and drop process segments on the timeline
+– Resize segments to define duration
+– Assign or reassign auditors to process segments
+• The same process may appear multiple times (e.g. Day 1 auditor A, Day 2 auditor B)
+
+Compliance Feedback (Critical)
+
+The UI must continuously reflect compliance status:
+
+• Green: fully compliant assignment
+• Orange: warning (near manday limit, partial coverage, etc.)
+• Red: violation (qualification mismatch, >7h/day, manday exceeded)
+
+The application should prioritize preventing or clearly flagging invalid audit plans rather than merely displaying data.
+
+Summary & Control View
+
+Provide a summary showing:
+
+• Total hours per auditor
+• Mandays used per auditor
+• Identification of all rule violations
+
+This summary exists to allow a final audit-planning sanity check before approval.
+
+Design Philosophy
+
+This tool exists to answer one question:
+
+“Does this audit plan fully comply with qualification, standard coverage, sector competence, and manday constraints?”
+
+UI simplicity and correctness are more important than visual sophistication.
+
+This project was built with [Lovable](https://lovable.dev).
+
+**Live app**: https://audit-flow-visual.lovable.app
+
+## Build with Lovable
+
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/21d4e5b4-47a3-43d5-a854-2a9ae44f8335).
+
+- **Ship faster**: describe what you want to build and Lovable handles the code.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+
+## Development
+
+Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
+git clone <this-repository-url>
+cd <repository-name>
 npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)

@@ -195,3 +195,68 @@ l'hébergement mutualisé :
   plans nommés que nécessaire (un par mission d'audit, par exemple) et les
   recharger depuis n'importe quel navigateur/poste, puisqu'ils sont
   stockés côté serveur.
+
+---
+
+## 9. Déploiement automatique via GitHub Actions (optionnel)
+
+Une fois le déploiement manuel initial fait (sections 2 à 6 ci-dessus), vous
+pouvez activer le déploiement automatique : chaque `git push` sur `main`
+reconstruit l'app, fait tourner les tests, et met à jour
+`tools.macerti.com/auditplan/` tout seul — sans FTP manuel.
+
+Le workflow est déjà présent dans le dépôt :
+`.github/workflows/deploy.yml`. Il ne fait qu'une seule chose une fois
+configuré : synchroniser le contenu de `dist/` (le build) vers votre
+serveur en FTPS. **Il ne touche jamais `api/config.php`** (ce fichier n'est
+pas versionné dans Git — voir section 4 — donc il n'existe pas dans le
+dossier synchronisé et le serveur ne le supprime ni ne l'écrase jamais).
+
+### a) Créer un compte FTP dédié (recommandé)
+
+Dans DirectAdmin → *FTP Management*, créez un compte FTP dont le dossier
+racine est restreint à `public_html/auditplan/` (pas tout le compte
+d'hébergement). Ainsi, même en cas de fuite de ces identifiants, seul ce
+sous-dossier serait exposé — pas le reste de `macerti.com`.
+
+### b) Ajouter les secrets GitHub
+
+Sur `https://github.com/macerti/auditplan-genie` → **Settings** →
+**Secrets and variables** → **Actions** :
+
+**Onglet "Secrets"** (valeurs chiffrées, jamais visibles après création) :
+
+| Nom du secret   | Valeur                                          |
+|-----------------|--------------------------------------------------|
+| `FTP_SERVER`    | Adresse du serveur FTP (ex: `ftp.macerti.com` ou l'IP fournie par votre hébergeur) |
+| `FTP_USERNAME`  | Identifiant du compte FTP créé à l'étape (a)     |
+| `FTP_PASSWORD`  | Mot de passe de ce compte FTP                    |
+
+**Onglet "Variables"** (valeur visible, pas un secret) :
+
+| Nom de la variable  | Valeur                                        |
+|---------------------|------------------------------------------------|
+| `FTP_SERVER_DIR`    | Chemin distant vers le dossier, avec `/` final — ex: `/domains/tools.macerti.com/public_html/auditplan/` (le chemin exact dépend de la structure de votre compte DirectAdmin ; consultez-le dans le gestionnaire de fichiers ou votre client FTP actuel) |
+
+### c) Vérifier
+
+Poussez un commit sur `main` (ou déclenchez manuellement le workflow
+depuis l'onglet **Actions** → *Déploiement — tools.macerti.com/auditplan*
+→ **Run workflow**). Le job doit passer au vert en quelques minutes. Le
+dernier step affiche le résultat de `api/health.php` à titre informatif.
+
+### d) À savoir
+
+- Le déploiement se déclenche uniquement sur `main` — travailler sur une
+  branche séparée puis fusionner (`merge`) reste sans risque, rien n'est
+  déployé tant que ça n'atteint pas `main`.
+- Les tests unitaires (`npm run test`) doivent passer pour que le
+  déploiement continue — un plan de conformité cassé ne peut pas atteindre
+  la production automatiquement.
+- Il n'y a **pas d'étape de validation manuelle** entre le push et la mise
+  en production : c'est un déploiement continu direct. Si vous préférez
+  ajouter une confirmation manuelle avant chaque mise en production (utile
+  si plusieurs personnes travaillent sur le dépôt), on peut ajouter un
+  [*GitHub Environment*](https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment)
+  avec approbation requise — dites-le-moi si vous voulez cette option.
+

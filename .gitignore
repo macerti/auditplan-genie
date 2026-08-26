@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets — never commit real DB credentials
+public/api/config.php
+
+# Local deployment zip assembly scratch space
+/deploy-build/
+*.zip
+

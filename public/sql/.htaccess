@@ -1,0 +1,10 @@
+# Le schéma SQL ne doit jamais être servi en HTTP : bloque tout accès
+# direct à ce dossier, quel que soit le fichier demandé.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

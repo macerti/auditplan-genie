@@ -26,8 +26,12 @@ import { findById, removeById, updateById, filterByIds } from '@/lib/arrayUtils'
 /** LocalStorage key for persisting audit data */
 const STORAGE_KEY = 'audit-calculator-data';
 
-/** Shape of data stored in localStorage */
-interface StoredState {
+/**
+ * Shape of data stored in localStorage — and also the shape used when
+ * saving/loading a named plan to/from the MariaDB backend (see
+ * src/lib/api.ts). Exported so both layers share a single source of truth.
+ */
+export interface StoredState {
   auditors: Auditor[];
   processes: Process[];
   segments: AuditSegment[];
@@ -302,6 +306,32 @@ export function useAuditStore() {
     });
   }, [auditors, processes, segments, auditDates, selectedDate]);
 
+  /**
+   * Export the current working state as a plain serializable snapshot.
+   * Used to save the current plan to the MariaDB backend (see PlanBar).
+   */
+  const exportSnapshot = useCallback((): StoredState => ({
+    auditors,
+    processes,
+    segments,
+    auditDates: auditDates.map(d => d.toISOString()),
+    selectedDate: selectedDate ? selectedDate.toISOString() : null,
+  }), [auditors, processes, segments, auditDates, selectedDate]);
+
+  /**
+   * Replace the entire working state with a snapshot loaded from the
+   * MariaDB backend (or a blank one for "New plan"). Does not touch
+   * localStorage directly — the persistence effect above will pick up
+   * the change and save it as the new local draft automatically.
+   */
+  const loadSnapshot = useCallback((snapshot: StoredState) => {
+    setAuditors(snapshot.auditors ?? []);
+    setProcesses(snapshot.processes ?? DEFAULT_PROCESSES);
+    setSegments(snapshot.segments ?? []);
+    setAuditDates((snapshot.auditDates ?? []).map(d => new Date(d)));
+    setSelectedDate(snapshot.selectedDate ? new Date(snapshot.selectedDate) : null);
+  }, []);
+
   // ==========================================================================
   // Return API
   // ==========================================================================
@@ -333,6 +363,10 @@ export function useAuditStore() {
     setSelectedDate,
     
     // Computed
-    getAuditorSummaries
+    getAuditorSummaries,
+
+    // Backend save/load (MariaDB)
+    exportSnapshot,
+    loadSnapshot
   };
 }

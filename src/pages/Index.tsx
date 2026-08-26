@@ -1,4 +1,5 @@
 import { useAuditStore } from '@/hooks/useAuditStore';
+import { PlanBar } from '@/components/PlanBar';
 import { DateSelector } from '@/components/DateSelector';
 import { AuditorPanel } from '@/components/AuditorPanel';
 import { ProcessPanel } from '@/components/ProcessPanel';
@@ -28,7 +29,9 @@ const Index = () => {
     removeAuditDate,
     selectedDate,
     setSelectedDate,
-    getAuditorSummaries
+    getAuditorSummaries,
+    exportSnapshot,
+    loadSnapshot
   } = useAuditStore();
 
   const summaries = getAuditorSummaries();
@@ -48,6 +51,9 @@ const Index = () => {
       </header>
 
       <main className="container mx-auto p-4 space-y-6">
+        {/* Plan Save/Load (MariaDB backend) */}
+        <PlanBar getSnapshot={exportSnapshot} loadSnapshot={loadSnapshot} />
+
         {/* Date Selection */}
         <DateSelector
           auditDates={auditDates}

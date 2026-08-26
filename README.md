@@ -108,25 +108,60 @@ This tool exists to answer one question:
 
 UI simplicity and correctness are more important than visual sophistication.
 
-This project was built with [Lovable](https://lovable.dev).
+This project was originally scaffolded with [Lovable](https://lovable.dev)
+and has since been fully de-coupled from it for self-hosted deployment.
 
-**Live app**: https://audit-flow-visual.lovable.app
+## Tech stack
 
-## Build with Lovable
+- **Frontend**: React + TypeScript + Vite, Tailwind CSS, shadcn/ui — built
+  as a static single-page app with relative asset paths, deployable to any
+  subfolder on shared hosting.
+- **Backend**: plain PHP (no framework, no Composer dependency) exposing a
+  small REST-ish API under `api/` for saving/loading named audit plans.
+- **Database**: MySQL / MariaDB — one table (`audit_plans`), see
+  `sql/schema.sql`.
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/21d4e5b4-47a3-43d5-a854-2a9ae44f8335).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+See **[DEPLOY.md](./DEPLOY.md)** for the full shared-hosting deployment
+guide (DirectAdmin / cPanel-style mutualized hosting, no SSH, no Node.js
+on the server).
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+git clone https://github.com/macerti/auditplan-genie.git
+cd auditplan-genie
+npm install
 npm run dev
 ```
+
+For the PHP backend during local development, copy the config template
+and point it at a local MySQL/MariaDB instance:
+
+```sh
+cp public/api/config.sample.php public/api/config.php
+# edit public/api/config.php with your local DB credentials
+mysql -u root your_db_name < public/sql/schema.sql
+php -S localhost:8000 -t public/api
+```
+
+## Testing
+
+Unit tests cover the compliance calculation engine (`src/lib/compliance.ts`)
+— the core business logic that determines whether an audit plan is
+compliant (green), at-risk (orange), or in violation (red):
+
+```sh
+npm run test
+```
+
+## Production build
+
+```sh
+npm run build
+```
+
+Outputs a self-contained, ready-to-upload folder in `dist/` — see
+[DEPLOY.md](./DEPLOY.md) for exactly what to do with it.
+

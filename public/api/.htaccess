@@ -1,0 +1,15 @@
+# Bloque l'accès HTTP direct aux fichiers de configuration (identifiants
+# MariaDB). Ces fichiers restent lisibles par PHP lui-même (require côté
+# serveur) — seul l'accès direct via navigateur/URL est interdit.
+
+Options -Indexes
+
+<FilesMatch "^config(\.sample)?\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

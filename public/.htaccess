@@ -1,0 +1,21 @@
+# AuditPlan Genie — protection racine (hébergement mutualisé DirectAdmin)
+# Compatible Apache 2.4+ (standard actuel), avec repli pour Apache 2.2.
+
+# Empêche le listing des dossiers si aucun index.html n'est présent
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Bloque l'accès HTTP direct à tout fichier sensible, où qu'il se trouve
+# dans l'arborescence (config, schéma SQL, logs, sauvegardes, scripts).
+<FilesMatch "\.(sql|env|log|ini|bak|sh|md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

@@ -102,7 +102,20 @@ export const labels = {
   multiSelect: { en: 'Auditors (multi-select)', fr: 'Auditeurs (multi-sélection)' },
   today: { en: 'Today', fr: 'Aujourd\'hui' },
   total: { en: 'Total', fr: 'Total' },
-  processAuditors: { en: 'Process / Auditors', fr: 'Processus / Auditeurs' }
+  processAuditors: { en: 'Process / Auditors', fr: 'Processus / Auditeurs' },
+
+  // === Plan Save/Load (MariaDB backend) ===
+  newPlan: { en: 'New Plan', fr: 'Nouveau Plan' },
+  loadPlan: { en: 'Load', fr: 'Charger' },
+  savePlan: { en: 'Save', fr: 'Enregistrer' },
+  unsavedPlan: { en: 'Unsaved plan', fr: 'Plan non enregistré' },
+  planNamePrompt: { en: 'Plan name', fr: 'Nom du plan' },
+  planNamePlaceholder: { en: 'e.g. ISO 9001 Audit – Client X – Sept 2026', fr: 'ex : Audit ISO 9001 – Client X – Sept 2026' },
+  noSavedPlans: { en: 'No saved plans yet', fr: 'Aucun plan enregistré pour l\'instant' },
+  lastUpdated: { en: 'Updated', fr: 'Mis à jour' },
+  backendConnected: { en: 'Database connected', fr: 'Base de données connectée' },
+  backendOffline: { en: 'Offline — local draft only', fr: 'Hors-ligne — brouillon local uniquement' },
+  confirmNewPlan: { en: 'Start a new blank plan? Unsaved changes to the current plan will be lost from this view (your last local draft stays in the browser).', fr: 'Démarrer un nouveau plan vierge ? Les modifications non enregistrées du plan actuel seront perdues de cette vue (votre dernier brouillon local reste dans le navigateur).' }
 } as const;
 
 /**
